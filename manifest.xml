@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+    Connect IQ manifest for the Calisthenics coach watch app.
+    Targets exactly 5 devices spanning Garmin's input/screen diversity.
+    minApiLevel 3.1.0: lowest level providing Application.Storage,
+    Communications.makeWebRequest, Timer, WatchUi and jsonData resources.
+-->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application
+        entry="GarminCalisthenicApp"
+        id="1021fe9fdbe94c8694da2ac2211f419d"
+        launcherIcon="@Drawables.LauncherIcon"
+        name="@Strings.AppName"
+        type="watch-app"
+        minApiLevel="3.1.0">
+
+        <!-- Exactly 5 target devices (see CLAUDE.md). Enduro 2 is the priority. -->
+        <iq:products>
+            <!-- Fenix 8 (AMOLED, touch + buttons) -->
+            <iq:product id="fenix843mm"/>
+            <iq:product id="fenix847mm"/>
+            <!-- Forerunner 970 (AMOLED, touch + buttons) -->
+            <iq:product id="fr970"/>
+            <!-- Venu 4 (AMOLED, touch) -->
+            <iq:product id="venu441mm"/>
+            <iq:product id="venu445mm"/>
+            <!-- Instinct 3 (buttons only; AMOLED and Solar/MIP variants) -->
+            <iq:product id="instinct3amoled45mm"/>
+            <iq:product id="instinct3amoled50mm"/>
+            <iq:product id="instinct3solar45mm"/>
+            <iq:product id="instinct3solar50mm"/>
+            <!-- Enduro 2 (buttons only, MIP) — personal device, priority -->
+            <iq:product id="enduro2"/>
+        </iq:products>
+
+        <!-- Communications is declared now so adding the grouped per-session
+             makeWebRequest later requires no manifest change. -->
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+        </iq:permissions>
+
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>

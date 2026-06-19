@@ -1,0 +1,8 @@
+<resources>
+    <!--
+        Mock session loaded at launch (stands in for the future backend payload).
+        Application.loadResource(Rez.JsonData.MockSession) returns the parsed
+        Dictionary in the exact shape makeWebRequest will later return.
+    -->
+    <jsonData id="MockSession" filename="mock_session.json"/>
+</resources>

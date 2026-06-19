@@ -1,0 +1,24 @@
+# Build configuration (jungle) for the Calisthenics watch app.
+#
+# Default source/resources discovery is used (source/, resources/, resources-*).
+project.manifest = manifest.xml
+
+# --- Graceful memory degradation -------------------------------------------
+# The optional parallel HR ActivityRecording feature exists in two forms that
+# expose the same RecordingHook API:
+#   RecordingHook.mc      annotated (:hrRecording)    -> real implementation
+#   RecordingHookStub.mc  annotated (:noHrRecording)  -> no-op
+#
+# Per-product `excludeAnnotations` REPLACES (does not append to) base, so each
+# build compiles exactly one of the two files:
+#   - default (high-memory devices): exclude the stub  -> real recorder
+#   - constrained devices:           exclude the real one -> stub
+#
+# Constrained = Enduro 2 (MIP) and Instinct 3 Solar (MIP). The core app
+# (session display + timers + local logging) never depends on RecordingHook,
+# so it builds and runs identically on all 5 devices.
+base.excludeAnnotations = noHrRecording
+
+enduro2.excludeAnnotations = hrRecording
+instinct3solar45mm.excludeAnnotations = hrRecording
+instinct3solar50mm.excludeAnnotations = hrRecording

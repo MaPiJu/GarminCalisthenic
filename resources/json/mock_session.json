@@ -1,0 +1,63 @@
+{
+  "session_id": "mock-2026-06-19",
+  "session_name": "Push & Core",
+  "blocks": [
+    {
+      "block_name": "Warm-up",
+      "exercises": [
+        {
+          "name": "Scapular Pulls",
+          "sets": 2,
+          "target_reps": 10,
+          "target_hold_seconds": null,
+          "rest_seconds": 30
+        },
+        {
+          "name": "Plank",
+          "sets": 1,
+          "target_reps": null,
+          "target_hold_seconds": 30,
+          "rest_seconds": 30
+        }
+      ]
+    },
+    {
+      "block_name": "Push",
+      "exercises": [
+        {
+          "name": "Push-ups",
+          "sets": 4,
+          "target_reps": 12,
+          "target_hold_seconds": null,
+          "rest_seconds": 90
+        },
+        {
+          "name": "Pike Push-ups",
+          "sets": 3,
+          "target_reps": 8,
+          "target_hold_seconds": null,
+          "rest_seconds": 90
+        }
+      ]
+    },
+    {
+      "block_name": "Core",
+      "exercises": [
+        {
+          "name": "Hollow Hold",
+          "sets": 3,
+          "target_reps": null,
+          "target_hold_seconds": 20,
+          "rest_seconds": 60
+        },
+        {
+          "name": "Leg Raises",
+          "sets": 3,
+          "target_reps": 12,
+          "target_hold_seconds": null,
+          "rest_seconds": 45
+        }
+      ]
+    }
+  ]
+}
