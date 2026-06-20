@@ -34,7 +34,7 @@ class RestView extends WatchUi.View {
         }
     }
 
-    function onTick() {
+    function onTick() as Void {
         _remaining -= 1;
         if (_remaining <= 0) {
             _remaining = 0;

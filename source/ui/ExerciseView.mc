@@ -49,9 +49,13 @@ class ExerciseView extends WatchUi.View {
             Layout.centerText(dc, 0.62, Graphics.FONT_NUMBER_MEDIUM, Theme.FG,
                 Layout.fmtClock(ex.targetHoldSeconds));
             Layout.centerText(dc, 0.80, Graphics.FONT_XTINY, Theme.DIM, "HOLD");
+        } else if (ex.targetReps != null) {
+            // FONT_NUMBER_MEDIUM only has digit glyphs — no letters, so no prefix.
+            Layout.centerText(dc, 0.62, Graphics.FONT_NUMBER_MEDIUM, Theme.FG,
+                ex.targetReps.toString());
+            Layout.centerText(dc, 0.80, Graphics.FONT_XTINY, Theme.DIM, "REPS");
         } else {
-            var target = ex.targetReps != null ? ("x " + ex.targetReps) : "max";
-            Layout.centerText(dc, 0.62, Graphics.FONT_NUMBER_MEDIUM, Theme.FG, target);
+            Layout.centerText(dc, 0.62, Graphics.FONT_LARGE, Theme.FG, "MAX");
             Layout.centerText(dc, 0.80, Graphics.FONT_XTINY, Theme.DIM, "REPS");
         }
 

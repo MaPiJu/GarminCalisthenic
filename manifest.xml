@@ -28,9 +28,10 @@
             <iq:product id="instinct3amoled45mm"/>
             <iq:product id="instinct3amoled50mm"/>
             <iq:product id="instinct3solar45mm"/>
-            <iq:product id="instinct3solar50mm"/>
-            <!-- Enduro 2 (buttons only, MIP) — personal device, priority -->
-            <iq:product id="enduro2"/>
+            <!-- instinct3solar50mm does not exist in the SDK; 45mm is the only Solar variant -->
+            <!-- Enduro / Enduro 2 (buttons only, MIP) — personal device, priority.
+                 Enduro 2 shares the "enduro" CIQ profile; no separate SDK entry. -->
+            <iq:product id="enduro"/>
         </iq:products>
 
         <!-- Communications is declared now so adding the grouped per-session

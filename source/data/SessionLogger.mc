@@ -1,4 +1,5 @@
 using Toybox.Application.Storage;
+using Toybox.Lang;
 using Toybox.Time;
 
 // ---------------------------------------------------------------------------
@@ -42,7 +43,7 @@ class SessionLogger {
         if (log == null) {
             log = [];
         }
-        log.add(entry);
+        (log as Lang.Array).add(entry);
         // Write back after every set — durable immediately.
         Storage.setValue(_logKey, log);
     }

@@ -134,11 +134,17 @@ Done:
 - Full base flow: Summary → Exercise (reps adjust + hold) → Rest/Hold timers
   with vibration → local logging → Finish recap. `WorkoutController` state machine.
 - HR `ActivityRecording` scaffolding (real + stub) wired through `RecordingHook`,
-  excluded on Enduro 2 / Instinct 3 Solar.
+  excluded on Enduro / Instinct 3 Solar.
+- **SDK 9.2.0 verified + full simulator test on Enduro (CIQ 3.4.2) passed.**
+  All 5 screens rendered and navigated end-to-end. Fixed: `Lang.Array` cast in
+  SessionLogger, `as Void` on Timer callbacks (HoldView/RestView), removed "x "
+  prefix from FONT_NUMBER_MEDIUM in ExerciseView (letters render as empty boxes).
+- Product IDs corrected: `enduro2` → `enduro` (shared CIQ profile);
+  `instinct3solar50mm` removed (SDK has only `instinct3solar45mm`, covers both).
 
 To do / next sessions:
-- Verify product ids against the installed SDK; run the simulator on **Enduro 2
-  first**, then the other 4 (check round vs MIP rendering, button-only flow).
+- Test on the other 4 devices in the simulator (fenix843mm, fr970, venu441mm,
+  instinct3amoled45mm) — check AMOLED rendering and touch hint display.
 - Replace mock loader with the grouped `makeWebRequest` call (backend brick).
 - Decide & add the activity-record permission if HR capture is wanted; flesh out
   `RecordingHook` (lap markers per set, etc.).
