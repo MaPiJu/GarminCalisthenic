@@ -12,9 +12,9 @@ this file is just the map and the one thing both bricks must agree on.
 │                    Monkey C VS Code extension; monkey.jungle uses default
 │                    discovery relative to its own location, so nothing in the
 │                    build changed by moving it here. See watch/CLAUDE.md.
-└── backend/       ← Future server brick: a service that calls the Claude API
-                     to generate/adapt a session and returns the contract JSON.
-                     Not built yet. See backend/README.md.
+└── backend/       ← Server brick: a Node/TypeScript service that calls the
+                     Claude API to generate a session and returns the contract
+                     JSON. Minimal but runnable. See backend/README.md.
 ```
 
 ## Bricks
@@ -23,9 +23,11 @@ this file is just the map and the one thing both bricks must agree on.
   the user through each set, runs rest/hold timers, validates and logs every set
   **locally and immediately**. Fully working today; full details, target devices,
   architecture and current state live in **`watch/CLAUDE.md`**.
-- **backend/** — the "coach IA" service. Out of scope as code for now; its only
-  obligation is to return the JSON contract below. The watch already speaks to it
-  through `watch/source/data/ApiConfig.mc` (endpoint, auth, timeout) +
+- **backend/** — the "coach IA" service (Node/TS, Express + Anthropic SDK). One
+  endpoint, `GET /v1/sessions/today`, generates a session with Claude
+  (`claude-opus-4-8`, structured outputs) and returns the JSON contract below;
+  serves a built-in sample when no `ANTHROPIC_API_KEY` is set. The watch speaks to
+  it through `watch/source/data/ApiConfig.mc` (endpoint, auth, timeout) +
   `SessionRepository.fetchSession()` (one grouped request, offline fallback).
 
 ## Shared contract (source of truth)
