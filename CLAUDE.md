@@ -86,16 +86,28 @@ Phase A closes that — it lives entirely under `backend/`, no watch changes.
   `new Anthropic()` (reads `ANTHROPIC_API_KEY`) and falls back to the sample when
   the key is absent. Step 1 is configuration + observation only.
 
-**Step 2 — Durable persistence.**
-- What: replace the in-memory `Map` cache in `src/generateSession.ts` with a
-  durable store (start simple: SQLite or a JSON file), keyed by `user_id` + date.
+**Step 2 — Durable persistence. ✅ DONE.**
+- What: the in-memory `Map` cache in `src/generateSession.ts` is replaced by
+  `src/sessionStore.ts` — a durable JSON store keyed by `user_id` + date
+  (`SESSIONS_DB_PATH`, default `backend/data/sessions.json`, gitignored). Atomic
+  writes (temp file + rename), serialized; concurrent generations for the same
+  athlete+day are deduped to a single in-flight Claude call.
 - Why / role: today a generated session is lost on restart. Persistence makes
   "today's session" stable across restarts and is the **prerequisite for the
   day-to-day adaptation loop** (later Phase C: feeding logged history back to
   Claude). It also lets the 8 s watch budget stay safe — a stored session is
   served instantly instead of regenerated.
+- Nuance: a Claude-generated session is persisted; when a key is present but
+  generation fails transiently, the sample is served but **not** persisted, so
+  the next request retries real generation instead of locking in a degraded plan.
 
 **Done when:** a real Claude-generated session is served and validates against
 the contract (Step 1), and repeated/after-restart GETs for the same athlete+day
 return the same stored session (Step 2). Later phases (deploy + HTTPS, the
 adaptation loop, watch polish) are tracked separately when Phase A lands.
+
+**Status (2026-06-22):** Step 2 implemented and verified end-to-end on the sample
+path (build clean under `tsc` strict; after a restart the server serves the
+stored session straight from disk). Step 1 remains a **config + observation**
+step for whoever holds the key: put a real `ANTHROPIC_API_KEY` in `backend/.env`,
+run `npm run dev`, and hit `GET /v1/sessions/today` — no code change required.

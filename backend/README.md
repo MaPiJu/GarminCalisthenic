@@ -72,7 +72,12 @@ offline cache stay stable for the day.
   plus the deterministic id and the sample fallback.
 - `src/generateSession.ts` — calls Claude via `messages.parse()` +
   `zodOutputFormat` (structured outputs, so the model's response validates).
-  In-memory cache per athlete+day; falls back to the sample on any error.
+  Reads/writes the durable store per athlete+day and dedups concurrent
+  generations; falls back to the sample on any error.
+- `src/sessionStore.ts` — durable persistence: a JSON file keyed by
+  `<user_id>-<YYYY-MM-DD>` (path = `SESSIONS_DB_PATH`, default `./data/sessions.json`,
+  gitignored). A generated session survives restarts and stays stable for the
+  day. Writes are atomic (temp file + rename) and serialized.
 - `src/server.ts` — Express, Bearer-token gate, the single GET route.
 
 ## Connecting the watch
@@ -89,7 +94,8 @@ Point the watch at this service in `watch/source/data/ApiConfig.mc`:
 ## Production notes (not done here)
 
 - HTTPS is mandatory for the watch; keep the 8s client budget in mind — the
-  in-memory cache makes repeat GETs instant, but cold generation can be slow, so
-  precompute/persist sessions server-side if latency matters.
-- Swap the in-memory cache + static `API_AUTH_TOKEN` for real per-user auth and
-  storage when this moves past local dev.
+  durable store makes repeat GETs (and post-restart GETs) instant, but cold
+  generation can be slow, so precompute sessions server-side if latency matters.
+- The JSON store is deliberately simple ("start simple" per the roadmap). Swap it
+  for SQLite/Postgres and the static `API_AUTH_TOKEN` for real per-user auth when
+  this moves past local dev / a single instance.

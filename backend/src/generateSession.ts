@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { SessionSchema, sampleSession, sessionIdFor, type Session } from "./sessionSchema";
+import { getSession, putSession } from "./sessionStore";
 
 // ---------------------------------------------------------------------------
 // The "coach IA": asks Claude to generate today's calisthenics session and
@@ -30,33 +31,58 @@ const SYSTEM_PROMPT = [
   "- Give session_name a short, motivating title.",
 ].join("\n");
 
-// In-memory cache keyed by athlete + day, so repeated GETs are instant and the
-// watch's short request budget isn't spent regenerating an identical plan.
-const cache = new Map<string, Session>();
+// Dedup concurrent generations for the same athlete+day: two near-simultaneous
+// GETs share a single in-flight promise instead of each calling Claude (which
+// costs money/latency and races on the store). Persistence itself lives in
+// sessionStore — a stored session survives restarts and stays stable all day.
+const inFlight = new Map<string, Promise<Session>>();
 
 export async function generateSession(userId: string): Promise<Session> {
   const key = sessionIdFor(userId);
-  const cached = cache.get(key);
-  if (cached) {
-    return cached;
+
+  const stored = await getSession(key);
+  if (stored) {
+    return stored;
   }
 
-  let session: Session;
+  const pending = inFlight.get(key);
+  if (pending) {
+    return pending;
+  }
+
+  const promise = produceSession(userId, key);
+  inFlight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    inFlight.delete(key);
+  }
+}
+
+async function produceSession(userId: string, key: string): Promise<Session> {
+  // No key configured: the sample IS the intended product, so persist it —
+  // it's deterministic and should stay stable for the day.
   if (client == null) {
-    session = sampleSession(userId);
-  } else {
-    try {
-      session = await callClaude(userId);
-    } catch (err) {
-      console.warn("[generateSession] generation failed, serving sample:", err);
-      session = sampleSession(userId);
-    }
+    const session = sampleSession(userId);
+    session.session_id = key; // server owns the id, regardless of the source
+    await putSession(key, session);
+    return session;
   }
 
-  // Server owns the id so it's deterministic regardless of what the model wrote.
-  session.session_id = key;
-  cache.set(key, session);
-  return session;
+  // Key present: try real generation and persist the result. On a transient
+  // failure, serve the sample but DON'T persist it — the next request retries
+  // real generation instead of being locked into a degraded plan for the day.
+  try {
+    const session = await callClaude(userId);
+    session.session_id = key;
+    await putSession(key, session);
+    return session;
+  } catch (err) {
+    console.warn("[generateSession] generation failed, serving sample (not persisted):", err);
+    const fallback = sampleSession(userId);
+    fallback.session_id = key;
+    return fallback;
+  }
 }
 
 async function callClaude(userId: string): Promise<Session> {

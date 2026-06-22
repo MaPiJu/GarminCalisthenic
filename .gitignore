@@ -7,6 +7,7 @@ watch/bin/
 # Backend brick (Node) — kept generic until the service lands
 backend/node_modules/
 backend/dist/
+backend/data/
 .env
 .env.local
 
