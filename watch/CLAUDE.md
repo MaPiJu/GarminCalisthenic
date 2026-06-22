@@ -194,12 +194,35 @@ Done:
     from cache/mock (`controller.isOffline`). Parser + models unchanged — the
     seam stayed isolated to `SessionRepository` exactly as designed.
   - The network never runs during the workout: local-first logging is untouched.
-  - **Not yet simulator-tested** (no SDK in this env) — needs a build + the four
-    paths exercised in the sim (200 / non-200 / timeout / cold offline).
+- **All 4 fetch paths simulator-tested on `fenix7x` (Enduro 2) — SDK 9.2.0
+  (2026-06-22).** Required a real build-fix first: `onReceive(responseCode, data)`
+  was untyped, so SDK 9.2's checker rejected `method(:onReceive)` as the
+  `makeWebRequest` callback (this async code had never been compiled). Fixed by
+  annotating the signature to the exact `Communications` callback PolyType
+  (`Number`, `Null or Dictionary or String or PersistedContent.Iterator`, `as Void`).
+  Then exercised each rung end-to-end via screen captures:
+  - `:offlineMock` — unreachable URL + no cache → Loading → Summary **OFFLINE** /
+    "Push & Core" (mock); ran the whole flow Exercise→rep-adjust→Rest→Hold→
+    **Finish (16/16 sets, 128 reps)** with no network.
+  - `:ok` — local HTTP server returning the contract (distinct "Server Pull Day");
+    Summary shows **TODAY** + the server session; JSON cached to `cached_session_json`.
+  - `:offlineCache` — back to unreachable URL, cache intact → **OFFLINE** but the
+    *cached server* session ("Server Pull Day"), NOT the mock. Proves caching +
+    cache-replay rung.
+  - timeout — host that accepts the TCP connection but never responds: Loading
+    persisted ~7–8s (the `REQUEST_TIMEOUT_MS` guard), then fell back **OFFLINE**
+    (→ mock with cache cleared, → cache otherwise). Guard timer confirmed.
+  - Test harness (no Screen-Recording-free path needed once granted): build with
+    `monkeyc -d fenix7x -y developer_key`, `monkeydo … fenix7x`; drive the sim via
+    AppleScript/AX menu clicks + Quartz mouse taps (pyobjc) on the watch screen
+    centre (~1223,300); capture with `screencapture -R<win-rect>`. HTTP path tests
+    use a local `python3 -m http.server`-style server + Settings → *Use Device
+    HTTPS Requirements* toggled OFF so `http://127.0.0.1` is accepted.
 
 To do / next sessions:
-- Simulator-test the 4 fetch paths (mock a 200 via the sim's makeWebRequest, then
-  non-200, timeout, and a cold start with no cache) across the 5 devices.
+- (Optional) repeat the 4 fetch paths on the other 4 devices; behaviour is
+  device-agnostic (seam is isolated in `SessionRepository`), so fenix7x is
+  representative.
 - Verify on the **physical Enduro 2** by sideloading the `fenix7x` .prg (simulator
   already confirmed MIP rendering + touch hints; physical test validates the
   part-number mapping end-to-end).

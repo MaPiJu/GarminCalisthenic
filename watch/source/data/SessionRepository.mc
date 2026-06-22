@@ -66,8 +66,13 @@ class SessionRepository {
     }
 
     // makeWebRequest response handler. A negative responseCode (no phone, BLE
-    // timeout, etc.) or any non-200 lands in the offline fallback.
-    function onReceive(responseCode, data) {
+    // timeout, etc.) or any non-200 lands in the offline fallback. The signature
+    // must match Communications' callback PolyType exactly so the type checker
+    // accepts method(:onReceive) as the request callback.
+    function onReceive(
+        responseCode as Toybox.Lang.Number,
+        data as Null or Toybox.Lang.Dictionary or Toybox.Lang.String or Toybox.PersistedContent.Iterator
+    ) as Void {
         if (_responded) {
             return;
         }
