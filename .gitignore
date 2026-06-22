@@ -1,8 +1,14 @@
-# Connect IQ build output
-/bin/
+# Connect IQ build output (watch brick)
+watch/bin/
 *.prg
 *.prg.debug.xml
 *.iq
+
+# Backend brick (Node) — kept generic until the service lands
+backend/node_modules/
+backend/dist/
+.env
+.env.local
 
 # Garmin / SDK local files
 *.msq
