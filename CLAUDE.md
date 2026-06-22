@@ -176,3 +176,10 @@ To do / next sessions:
   permission already in manifest.
 - Optional: persist/queue finished-session logs for later upload by the companion.
 - Polish: long-name truncation per screen size, count-up hold option, settings.
+- **Exercise GIF/animation integration (future):** Garmin embeds animated exercise
+  illustrations (push-ups, pull-ups, etc.) in its built-in workout app. These are
+  device-specific assets — available on AMOLED high-mem devices, likely absent on
+  MIP/constrained ones. Investigate `WatchUi.AnimationLayer` or bundled `AnimatedBitmap`
+  resources as the mechanism; gate behind a runtime capability check so it degrades
+  gracefully (text-only fallback on Enduro 1 / Instinct 3 Solar). Map exercise names
+  in the session JSON to the corresponding Garmin asset IDs per device family.
