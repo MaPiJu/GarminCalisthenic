@@ -50,13 +50,23 @@ the actual count).
 | Fenix 8 (AMOLED)| `fenix843mm`, `fenix847mm`                                            | touch + buttons  | AMOLED round  | high-mem    |
 | Forerunner 970  | `fr970`                                                              | touch + buttons  | AMOLED round  | high-mem    |
 | Venu 4          | `venu441mm`, `venu445mm`                                              | touch (+2 btn)   | AMOLED round  | high-mem    |
-| Instinct 3      | `instinct3amoled45mm`, `instinct3amoled50mm` (AMOLED) / `instinct3solar45mm`, `instinct3solar50mm` (MIP) | buttons only | AMOLED or MIP | AMOLED=high / Solar(MIP)=constrained |
-| **Enduro 2**    | `enduro2`                                                            | buttons only     | MIP round     | **constrained — PRIORITY test device** |
+| Instinct 3      | `instinct3amoled45mm`, `instinct3amoled50mm` (AMOLED) / `instinct3solar45mm` (MIP) | buttons only | AMOLED or MIP | AMOLED=high / Solar(MIP)=constrained |
+| **Enduro 2**    | **`fenix7x`** (real target — see below)                              | touch + buttons  | MIP round     | high-mem — **PRIORITY device** |
+
+> **Enduro 2 mapping (important).** The Enduro 2 has **no dedicated CIQ profile**:
+> its part number sits inside the **`fenix7x`** device definition, so `fenix7x` is
+> the build target that actually installs on a physical Enduro 2 (it also pulls in
+> the Fenix 7/7X family). Consequences: (1) the Enduro 2 is a **high-memory**
+> device, not constrained — it gets the real HR recorder; (2) it has a
+> **touchscreen** + buttons, so it shows "Tap" hints. We also keep **`enduro`**
+> (the older Enduro 1, CIQ 3.4.2, MIP, buttons-only) as a conservative
+> *constrained* test target — if the flow works there it works on the Enduro 2.
+> Verify definitively by **sideloading the .prg to the real Enduro 2**.
 
 Why these 5: popularity + they span the full Garmin input/screen diversity
 (touch / hybrid / buttons-only, AMOLED / MIP). **Enduro 2 is the real personal
-device** → always validate on Enduro 2 first in the simulator; if a trade-off
-must favor one device, favor the Enduro 2.
+device** → always validate first in the simulator (via `fenix7x`, plus the
+constrained `enduro`); if a trade-off must favor one device, favor the Enduro 2.
 
 > ⚠️ Product-id strings are SDK-version specific. They were chosen from the best
 > available references but Garmin's device pages were unreachable at setup time.
@@ -86,11 +96,13 @@ must favor one device, favor the Enduro 2.
   feature lives behind `RecordingHook`. Two implementations expose the same API:
   `RecordingHook.mc` (`:hrRecording`, real) and `RecordingHookStub.mc`
   (`:noHrRecording`, no-op). `monkey.jungle` excludes the heavy one on the
-  constrained variants (Enduro 2, Instinct 3 Solar/MIP) and the stub everywhere
-  else. The core flow (session display + timers + local logging) never depends
-  on it, so it works on all 5. (HR recording also needs an activity-record
-  permission added to the manifest before it actually records — left off by
-  default so base testing has no save prompts.)
+  genuinely constrained MIP variants (Enduro 1 `enduro`, Instinct 3 Solar
+  `instinct3solar45mm`) and the stub everywhere else. The Enduro 2 builds as
+  `fenix7x` (high memory), so it keeps the real recorder. The core flow (session
+  display + timers + local logging) never depends on it, so it works on every
+  target. (The `Fit` permission is now in the manifest, so on capable devices
+  `RecordingHook.start()` really starts a recording and `stop(true)` saves a FIT
+  activity — pass `stop(false)` to discard during testing.)
 
 ## Architecture decisions
 
@@ -139,8 +151,11 @@ Done:
   All 5 screens rendered and navigated end-to-end. Fixed: `Lang.Array` cast in
   SessionLogger, `as Void` on Timer callbacks (HoldView/RestView), removed "x "
   prefix from FONT_NUMBER_MEDIUM in ExerciseView (letters render as empty boxes).
-- Product IDs corrected: `enduro2` → `enduro` (shared CIQ profile);
-  `instinct3solar50mm` removed (SDK has only `instinct3solar45mm`, covers both).
+- Product IDs corrected: `instinct3solar50mm` removed (SDK has only
+  `instinct3solar45mm`). Enduro 2 understood correctly — it has no own CIQ
+  profile, its part number lives under `fenix7x`, so **`fenix7x` added** as the
+  real Enduro 2 target; `enduro` (Enduro 1, CIQ 3.4.2) kept as a constrained test
+  target. (Supersedes the earlier `enduro2`→`enduro` note.)
 - **All 5 devices simulator-tested end-to-end (2026-06-22).** Added `Fit`
   permission to manifest (required by SDK 9.2 type checker for `RecordingHook.mc`
   on high-mem devices, even with try/catch guard). Touch/button hint switching
@@ -148,6 +163,8 @@ Done:
   and enduro. AMOLED rendering clean on all round screens.
 
 To do / next sessions:
+- Verify on the **physical Enduro 2** by sideloading the `fenix7x` build (ground
+  truth that the part-number mapping is right); confirm touch hints + rendering.
 - Replace mock loader with the grouped `makeWebRequest` call (backend brick).
 - Decide & flesh out `RecordingHook` (lap markers per set, etc.) — `Fit`
   permission already in manifest.

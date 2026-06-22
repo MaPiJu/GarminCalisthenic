@@ -29,8 +29,13 @@
             <iq:product id="instinct3amoled50mm"/>
             <iq:product id="instinct3solar45mm"/>
             <!-- instinct3solar50mm does not exist in the SDK; 45mm is the only Solar variant -->
-            <!-- Enduro / Enduro 2 (buttons only, MIP) — personal device, priority.
-                 Enduro 2 shares the "enduro" CIQ profile; no separate SDK entry. -->
+            <!-- Enduro 2 (personal device, PRIORITY): it has NO own CIQ profile.
+                 Its part number lives under fenix7x, so fenix7x is the real build
+                 target that installs on a physical Enduro 2 (and covers the
+                 Fenix 7/7X family too).
+                 enduro = the older Enduro 1 (CIQ 3.4.2), kept as a conservative
+                 buttons-only / MIP, memory-constrained extra test target. -->
+            <iq:product id="fenix7x"/>
             <iq:product id="enduro"/>
         </iq:products>
 

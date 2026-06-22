@@ -14,9 +14,11 @@ project.manifest = manifest.xml
 #   - default (high-memory devices): exclude the stub  -> real recorder
 #   - constrained devices:           exclude the real one -> stub
 #
-# Constrained = Enduro (covers Enduro 2, same CIQ profile) and Instinct 3 Solar (MIP).
-# The core app (session display + timers + local logging) never depends on RecordingHook,
-# so it builds and runs identically on all 5 devices.
+# Constrained (compile the no-op stub) = Enduro 1 (enduro) and Instinct 3 Solar
+# (instinct3solar45mm), both MIP. NOTE: the Enduro 2 builds as fenix7x, which is a
+# high-memory device, so it gets the REAL recorder via the default rule above.
+# The core app (session display + timers + local logging) never depends on
+# RecordingHook, so it builds and runs identically on every target.
 base.excludeAnnotations = noHrRecording
 
 enduro.excludeAnnotations = hrRecording
