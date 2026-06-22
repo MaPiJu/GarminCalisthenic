@@ -122,7 +122,7 @@ exercise. After the last set → FinishView (sets done, total reps, elapsed).
 
 ## Current state
 
-Updated: 2026-06-19
+Updated: 2026-06-22
 
 Done:
 - Project scaffold: `manifest.xml` (5 devices, minApiLevel 3.1.0), `monkey.jungle`
@@ -141,12 +141,15 @@ Done:
   prefix from FONT_NUMBER_MEDIUM in ExerciseView (letters render as empty boxes).
 - Product IDs corrected: `enduro2` → `enduro` (shared CIQ profile);
   `instinct3solar50mm` removed (SDK has only `instinct3solar45mm`, covers both).
+- **All 5 devices simulator-tested end-to-end (2026-06-22).** Added `Fit`
+  permission to manifest (required by SDK 9.2 type checker for `RecordingHook.mc`
+  on high-mem devices, even with try/catch guard). Touch/button hint switching
+  verified: "Tap" on fenix843mm/fr970/venu441mm, "START" on instinct3amoled45mm
+  and enduro. AMOLED rendering clean on all round screens.
 
 To do / next sessions:
-- Test on the other 4 devices in the simulator (fenix843mm, fr970, venu441mm,
-  instinct3amoled45mm) — check AMOLED rendering and touch hint display.
 - Replace mock loader with the grouped `makeWebRequest` call (backend brick).
-- Decide & add the activity-record permission if HR capture is wanted; flesh out
-  `RecordingHook` (lap markers per set, etc.).
+- Decide & flesh out `RecordingHook` (lap markers per set, etc.) — `Fit`
+  permission already in manifest.
 - Optional: persist/queue finished-session logs for later upload by the companion.
 - Polish: long-name truncation per screen size, count-up hold option, settings.
