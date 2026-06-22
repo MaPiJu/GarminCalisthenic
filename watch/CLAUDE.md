@@ -167,6 +167,11 @@ Done:
   on high-mem devices, even with try/catch guard). Touch/button hint switching
   verified: "Tap" on fenix843mm/fr970/venu441mm, "START" on instinct3amoled45mm
   and enduro. AMOLED rendering clean on all round screens.
+- **`fenix7x` (Enduro 2 real target) simulator-tested end-to-end (2026-06-22).**
+  RestView, countdown timer, and "tap: skip" hint all render correctly on the MIP
+  round screen. Touch hints confirmed ("tap", not "START") — fenix7x is high-mem
+  with touchscreen. This is the ground truth that the Enduro 2 part-number mapping
+  is correct; sideload the `fenix7x` .prg to the physical device to confirm.
 - **Backend wiring (client side) — the grouped network fetch + resilience.**
   - API contract frozen in `source/data/ApiConfig.mc` (endpoint, auth header,
     user id, timeout): `GET {BASE_URL}/sessions/today?user_id=<id>` with
@@ -195,8 +200,9 @@ Done:
 To do / next sessions:
 - Simulator-test the 4 fetch paths (mock a 200 via the sim's makeWebRequest, then
   non-200, timeout, and a cold start with no cache) across the 5 devices.
-- Verify on the **physical Enduro 2** by sideloading the `fenix7x` build (ground
-  truth that the part-number mapping is right); confirm touch hints + rendering.
+- Verify on the **physical Enduro 2** by sideloading the `fenix7x` .prg (simulator
+  already confirmed MIP rendering + touch hints; physical test validates the
+  part-number mapping end-to-end).
 - Server brick (separate, out of scope for the watch): stand up
   `GET /sessions/today` that calls the Claude API to generate/adapt the plan and
   returns the contract JSON; then flip `ApiConfig.BASE_URL` to the real host and
@@ -205,3 +211,10 @@ To do / next sessions:
   permission already in manifest.
 - Optional: persist/queue finished-session logs for later upload by the companion.
 - Polish: long-name truncation per screen size, count-up hold option, settings.
+- **Exercise GIF/animation integration (future):** Garmin embeds animated exercise
+  illustrations (push-ups, pull-ups, etc.) in its built-in workout app. These are
+  device-specific assets — available on AMOLED high-mem devices, likely absent on
+  MIP/constrained ones. Investigate `WatchUi.AnimationLayer` or bundled `AnimatedBitmap`
+  resources as the mechanism; gate behind a runtime capability check so it degrades
+  gracefully (text-only fallback on Enduro 1 / Instinct 3 Solar). Map exercise names
+  in the session JSON to the corresponding Garmin asset IDs per device family.
