@@ -161,10 +161,16 @@ Done:
   on high-mem devices, even with try/catch guard). Touch/button hint switching
   verified: "Tap" on fenix843mm/fr970/venu441mm, "START" on instinct3amoled45mm
   and enduro. AMOLED rendering clean on all round screens.
+- **`fenix7x` (Enduro 2 real target) simulator-tested end-to-end (2026-06-22).**
+  RestView, countdown timer, and "tap: skip" hint all render correctly on the MIP
+  round screen. Touch hints confirmed ("tap", not "START") — fenix7x is high-mem
+  with touchscreen. This is the ground truth that the Enduro 2 part-number mapping
+  is correct; sideload the `fenix7x` .prg to the physical device to confirm.
 
 To do / next sessions:
-- Verify on the **physical Enduro 2** by sideloading the `fenix7x` build (ground
-  truth that the part-number mapping is right); confirm touch hints + rendering.
+- Verify on the **physical Enduro 2** by sideloading the `fenix7x` .prg (simulator
+  already confirmed MIP rendering + touch hints; physical test validates the
+  part-number mapping end-to-end).
 - Replace mock loader with the grouped `makeWebRequest` call (backend brick).
 - Decide & flesh out `RecordingHook` (lap markers per set, etc.) — `Fit`
   permission already in manifest.
