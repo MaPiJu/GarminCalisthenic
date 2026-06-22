@@ -12,8 +12,12 @@ using Toybox.System;
 class WorkoutController {
 
     public var session;             // Session
+    public var isOffline;           // true when the session came from cache/mock
+    public var loadStatus;          // :ok / :offlineCache / :offlineMock / :error / null
 
     private var _logger;
+    private var _repo;              // kept alive across the async fetch
+    private var _loadingView;       // LoadingView, notified on hard failure
     private var _flat;              // Array of [blockName, Exercise]
     private var _exIndex;          // index into _flat
     private var _setIndex;         // 1-based set within the current exercise
@@ -30,13 +34,48 @@ class WorkoutController {
         totalSets = 0;
         completedSets = 0;
         totalReps = 0;
+        isOffline = false;
+        loadStatus = null;
     }
 
-    // Load the session from the data layer (mock JSON today, network later).
-    function load() {
-        var repo = new SessionRepository();
-        session = repo.loadSession();
+    // ----- Async loading (network -> cache -> mock) ------------------------
+    // Kick off the single grouped fetch. The LoadingView calls this on show and
+    // is notified back only if the load hard-fails (no data at all).
+    function beginLoad(loadingView) {
+        _loadingView = loadingView;
+        loadStatus = null;
+        _repo = new SessionRepository();
+        _repo.fetchSession(method(:onSessionLoaded));
+    }
+
+    // Re-trigger the fetch from the loading screen after a hard failure.
+    function retryLoad() {
+        if (_loadingView != null) {
+            _loadingView.onLoadStarted();
+        }
+        loadStatus = null;
+        _repo.fetchSession(method(:onSessionLoaded));
+    }
+
+    // Repository result. With a session in hand we build the run and head to the
+    // recap; otherwise the loading screen shows a retry affordance.
+    function onSessionLoaded(status, sess) {
+        loadStatus = status;
+        if (sess != null) {
+            isOffline = (status != :ok);
+            setSession(sess);
+            showSummary();
+        } else if (_loadingView != null) {
+            _loadingView.onLoadFailed();
+        }
+    }
+
+    // Build the flattened progression list from a freshly loaded session. The
+    // original block grouping is preserved on `session` for the recap.
+    function setSession(sess) {
+        session = sess;
         _flat = [];
+        totalSets = 0;
         for (var b = 0; b < session.blocks.size(); b++) {
             var block = session.blocks[b];
             for (var e = 0; e < block.exercises.size(); e++) {
@@ -44,6 +83,11 @@ class WorkoutController {
                 totalSets += block.exercises[e].sets;
             }
         }
+    }
+
+    function showSummary() {
+        var view = new SummaryView(self);
+        WatchUi.switchToView(view, new ScreenDelegate(view), WatchUi.SLIDE_LEFT);
     }
 
     // ----- Accessors used by the views -------------------------------------
