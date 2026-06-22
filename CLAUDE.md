@@ -161,11 +161,40 @@ Done:
   on high-mem devices, even with try/catch guard). Touch/button hint switching
   verified: "Tap" on fenix843mm/fr970/venu441mm, "START" on instinct3amoled45mm
   and enduro. AMOLED rendering clean on all round screens.
+- **Backend wiring (client side) — the grouped network fetch + resilience.**
+  - API contract frozen in `source/data/ApiConfig.mc` (endpoint, auth header,
+    user id, timeout): `GET {BASE_URL}/sessions/today?user_id=<id>` with
+    `Authorization: Bearer <token>`, returning the *exact* `mock_session.json`
+    shape. URL/token are documented placeholders; `userId()`/`authToken()` read
+    from `Storage` (to be provisioned by the future companion) with dev defaults.
+  - `SessionRepository.loadSession()` (sync mock) replaced by async
+    `fetchSession(callback)`: ONE grouped `Communications.makeWebRequest` per
+    session, BEFORE the workout. Resilience ladder: 200 → parse + cache raw JSON
+    (`:ok`); error/timeout + cache present → replay last cached session
+    (`:offlineCache`); no cache → bundled mock (`:offlineMock`); nothing → `:error`.
+    Explicit guard `Timer` (`ApiConfig.REQUEST_TIMEOUT_MS`, 8s) + `_responded`
+    flag guarantees the callback fires exactly once; sync throw from
+    makeWebRequest is caught and routed to the offline fallback too.
+  - New `LoadingView` is now the initial view: kicks the fetch on `onShow`, then
+    the controller `switchToView`s to Summary as soon as a session exists. A hard
+    failure shows a retry affordance. `WorkoutController.load()` → async
+    `beginLoad`/`onSessionLoaded`/`retryLoad`/`setSession`/`showSummary`.
+  - `SummaryView` shows an **OFFLINE** flag (vs **TODAY**) when the plan came
+    from cache/mock (`controller.isOffline`). Parser + models unchanged — the
+    seam stayed isolated to `SessionRepository` exactly as designed.
+  - The network never runs during the workout: local-first logging is untouched.
+  - **Not yet simulator-tested** (no SDK in this env) — needs a build + the four
+    paths exercised in the sim (200 / non-200 / timeout / cold offline).
 
 To do / next sessions:
+- Simulator-test the 4 fetch paths (mock a 200 via the sim's makeWebRequest, then
+  non-200, timeout, and a cold start with no cache) across the 5 devices.
 - Verify on the **physical Enduro 2** by sideloading the `fenix7x` build (ground
   truth that the part-number mapping is right); confirm touch hints + rendering.
-- Replace mock loader with the grouped `makeWebRequest` call (backend brick).
+- Server brick (separate, out of scope for the watch): stand up
+  `GET /sessions/today` that calls the Claude API to generate/adapt the plan and
+  returns the contract JSON; then flip `ApiConfig.BASE_URL` to the real host and
+  provision `user_id`/`auth_token` (companion pairing).
 - Decide & flesh out `RecordingHook` (lap markers per set, etc.) — `Fit`
   permission already in manifest.
 - Optional: persist/queue finished-session logs for later upload by the companion.

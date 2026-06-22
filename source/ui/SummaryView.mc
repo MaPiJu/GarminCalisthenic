@@ -14,8 +14,10 @@ class SummaryView extends WatchUi.View {
     function onUpdate(dc) {
         Layout.clear(dc);
 
-        // Title
-        Layout.centerText(dc, 0.13, Graphics.FONT_TINY, Theme.ACCENT, "TODAY");
+        // Title — flags a cached/mock plan when the fetch couldn't reach the net.
+        Layout.centerText(dc, 0.13, Graphics.FONT_TINY,
+            _c.isOffline ? Theme.WARN : Theme.ACCENT,
+            _c.isOffline ? "OFFLINE" : "TODAY");
         Layout.centerText(dc, 0.22, Graphics.FONT_MEDIUM, Theme.FG, _c.session.name);
 
         // Blocks list (name + exercise count), spaced relative to screen height.

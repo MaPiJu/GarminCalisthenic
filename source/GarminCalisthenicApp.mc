@@ -1,8 +1,9 @@
 using Toybox.Application;
 using Toybox.WatchUi;
 
-// App entry point. Loads the session through the data layer, then shows the
-// recap screen as the initial view.
+// App entry point. Shows a loading screen first; it asynchronously fetches the
+// day's session through the data layer (network -> offline cache -> mock) and
+// then switches to the recap. No network is touched once the workout starts.
 class GarminCalisthenicApp extends Application.AppBase {
 
     function initialize() {
@@ -11,8 +12,7 @@ class GarminCalisthenicApp extends Application.AppBase {
 
     function getInitialView() {
         var controller = new WorkoutController();
-        controller.load();
-        var view = new SummaryView(controller);
+        var view = new LoadingView(controller);
         return [view, new ScreenDelegate(view)];
     }
 }
