@@ -50,3 +50,49 @@ Content-Type: application/json
     { "exercise": "Plank", "target_reps": null, "target_hold_seconds": 45, "achieved_reps": null, "achieved_hold_seconds": 30, "completed": false }
   ]
 }
+
+# ===========================================================================
+# Mobile companion (coach-IA) — propose → confirm → the watch then pulls it.
+# Works in offline sample mode too (no ANTHROPIC_API_KEY): chat proposes the
+# sample, confirm stores it, GET /sessions/today serves it.
+# ===========================================================================
+
+### A — chat with the coach; the reply attaches a proposed_session when ready
+POST {{baseUrl}}/v1/coach/chat
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "message": "I've got 30 minutes and want to work on push strength today."
+}
+
+### B — confirm a session (copy a proposed_session from A, or send your own).
+# After this, GET /v1/sessions/today for the same user returns EXACTLY this.
+POST {{baseUrl}}/v1/sessions/confirm
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "session": {
+    "session_id": "ignored-server-stamps-it",
+    "session_name": "My Confirmed Push Day",
+    "blocks": [
+      { "block_name": "Push",
+        "exercises": [
+          { "name": "Push-ups", "sets": 4, "target_reps": 12, "target_hold_seconds": null, "rest_seconds": 90 },
+          { "name": "Pike Push-ups", "sets": 3, "target_reps": 8, "target_hold_seconds": null, "rest_seconds": 90 }
+        ] }
+    ]
+  }
+}
+
+### C — read the current program: today's session + recent adaptation notes
+GET {{baseUrl}}/v1/program?user_id={{userId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Missing token on a mobile endpoint — should return 401 unauthorized
+GET {{baseUrl}}/v1/program?user_id={{userId}}
+Accept: application/json

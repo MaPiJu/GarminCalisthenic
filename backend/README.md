@@ -93,6 +93,45 @@ Body:
 → 200 { "ok": true }   (400 on a malformed body, 401 without a valid token)
 ```
 
+### Mobile companion endpoints (coach-IA)
+
+The mobile app talks **only to the server** (propose → confirm; nothing reaches
+the watch until the athlete validates it). All three are additive — the watch's
+`GET /sessions/today` + `POST /sessions/log` above are untouched — and, like
+generation, fall back to a sample when no `ANTHROPIC_API_KEY` is set.
+
+```
+POST /v1/coach/chat        { user_id, message } → { reply, proposed_session | null }
+    Chat with the coach. The reply attaches a proposed_session (the exact
+    GET /sessions/today shape) once the coach has enough to propose one — null
+    while still gathering info. The conversation is kept per user_id.
+
+POST /v1/sessions/confirm  { user_id, session } → { ok: true }
+    The session the athlete accepted. Stored under the athlete+day key (the
+    server stamps session_id), so GET /sessions/today then serves exactly it.
+
+GET  /v1/program?user_id=<id> → { today: <Session> | null, recent_changes: [string] }
+    Today's stored session (null if none yet) + human-readable adaptation notes.
+```
+
+All require `Authorization: Bearer <token>` (401 otherwise); `/coach/chat` and
+`/sessions/confirm` return 400 on a malformed body.
+
+Quick end-to-end (offline sample mode works without a key):
+
+```bash
+# propose
+curl -s -X POST http://localhost:8080/v1/coach/chat \
+  -H "Authorization: Bearer DEV_TOKEN" -H "Content-Type: application/json" \
+  -d '{"user_id":"demo-user","message":"give me a push day"}'
+# confirm the proposed_session from the reply, then GET /sessions/today returns it
+curl -s -X POST http://localhost:8080/v1/sessions/confirm \
+  -H "Authorization: Bearer DEV_TOKEN" -H "Content-Type: application/json" \
+  -d '{"user_id":"demo-user","session": <proposed_session> }'
+curl -s http://localhost:8080/v1/program?user_id=demo-user \
+  -H "Authorization: Bearer DEV_TOKEN"
+```
+
 ## How it's wired
 
 - `src/sessionSchema.ts` — Zod schema = single source of truth for the contract,
@@ -109,8 +148,18 @@ Body:
 - `src/historyStore.ts` — durable logged-history store (Phase C): per-athlete
   workout results from `POST /sessions/log` (path = `HISTORY_DB_PATH`, default
   `./data/history.json`, gitignored). Same atomic/serialized write discipline.
-- `src/server.ts` — Express, Bearer-token gate, the `GET /sessions/today` and
-  `POST /sessions/log` routes.
+- `src/coach.ts` — the coach-IA chat (`POST /coach/chat`). One structured Claude
+  call returns both the conversational `reply` and an optional `proposed_session`
+  (`zodOutputFormat`); folds in the same recent-history context as generation;
+  falls back to a canned reply + the sample proposal with no key. Chats are
+  serialized per athlete so the conversation can't interleave.
+- `src/coachStore.ts` — durable per-athlete coach state: the running conversation
+  (so chat is stateful) and the `recent_changes` notes surfaced by `GET /program`
+  (path = `COACH_DB_PATH`, default `./data/coach.json`, gitignored). Same
+  atomic/serialized write discipline as the other stores.
+- `src/server.ts` — Express, Bearer-token gate, the watch routes
+  (`GET /sessions/today`, `POST /sessions/log`) and the mobile routes
+  (`POST /coach/chat`, `POST /sessions/confirm`, `GET /program`).
 
 ## Connecting the watch
 

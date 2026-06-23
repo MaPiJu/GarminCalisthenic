@@ -86,12 +86,13 @@ Headers: Authorization: Bearer <token>, Content-Type: application/json
 200 application/json: { "ok": true }
 ```
 
-### Mobile ↔ server (planned — coach-IA companion)
+### Mobile ↔ server (coach-IA companion)
 
 The mobile companion app talks **only to the server** (see `ARCHITECTURE.md`).
-These endpoints are **designed, not yet implemented**. The flow is propose →
-confirm, so nothing reaches the watch until the athlete validates it. `<Session>`
-is the exact session shape from `GET /sessions/today` above.
+These three endpoints are **implemented server-side** (under `/v1`); the mobile
+client that calls them is the remaining piece. The flow is propose → confirm, so
+nothing reaches the watch until the athlete validates it. `<Session>` is the exact
+session shape from `GET /sessions/today` above.
 
 ```
 # A — talk to the coach, get a proposal
@@ -179,19 +180,28 @@ watch's `makeWebRequest`), then the Phase C adaptation loop.
 
 ## Roadmap — next steps (post Phase A)
 
-Phase A (real Claude generation + durable persistence) is done, and the watch's
-`POST /sessions/log` is built **server-side**. The contracts for the rest are
-specified above (see "Logging back results" and "Mobile ↔ server (planned)").
+Phase A (real Claude generation + durable persistence) is done, the watch's
+`POST /sessions/log` is built **server-side**, and the three mobile-facing
+endpoints (point 1) are now implemented too. The contracts are specified above
+(see "Logging back results" and "Mobile ↔ server (coach-IA companion)").
 Remaining work, in rough order:
 
-1. **Mobile-facing backend endpoints (backend/).** Implement the three designed
-   guichets: `POST /coach/chat` (athlete message → coach `reply` + a
-   `proposed_session`), `POST /sessions/confirm` (validate → store as today's
-   session; `GET /sessions/today` already serves whatever is in `sessionStore`),
-   `GET /program` (today + `recent_changes`). Backend-only, testable on localhost;
-   fall back to a sample like `generateSession` when no `ANTHROPIC_API_KEY`. Reuse
-   the existing patterns (`sessionStore`, `zodOutputFormat`, `requireBearer`).
-   **Status: designed, not implemented.**
+1. **Mobile-facing backend endpoints (backend/). ✅ DONE.** The three guichets are
+   live under `/v1`, additive (the watch's `GET /sessions/today` + `POST
+   /sessions/log` are untouched): `POST /v1/coach/chat` (athlete message → coach
+   `reply` + a `proposed_session`, via Claude structured outputs in `src/coach.ts`),
+   `POST /v1/sessions/confirm` (validate → `putSession` under the athlete+day key,
+   so `GET /sessions/today` then serves exactly the confirmed session), `GET
+   /v1/program` (today's stored session + `recent_changes`). The coach conversation
+   and the adaptation notes persist per `user_id` in `src/coachStore.ts` (same
+   atomic/serialized JSON discipline as `sessionStore`/`historyStore`,
+   `COACH_DB_PATH`, default `./data/coach.json`). Reuses `requireBearer`,
+   `zodOutputFormat`, `sessionStore`, and the in-sample fallback (`coach/chat`
+   proposes the sample, `confirm`/`program` work) when no `ANTHROPIC_API_KEY`.
+   Validated on localhost: propose → confirm → `GET /sessions/today` returns the
+   confirmed session; `GET /program`; 401 without a token; 400 on bad payloads;
+   `tsc --strict` clean; the watch GET is non-regressed. The mobile client that
+   calls these (point 3) is the remaining piece.
 2. **Watch → server upload (watch/).** Make the on-watch app POST its local per-set
    log to `POST /sessions/log` after the workout (hook into the finish flow; queue
    locally, send when online). Map the watch's `actual_reps` / `actual_hold_seconds`

@@ -41,8 +41,9 @@ is exactly how it already works today.
 
 1. **Define / adapt (mobile ⇄ server).** The athlete chats with the coach-IA in the
    mobile app; the server asks Claude and stores the resulting session + program.
-   *Planned endpoints: `POST /coach/chat` (propose) → `POST /sessions/confirm`
-   (validate) → `GET /program` (read adaptations) — specified in `CLAUDE.md`.*
+   *Endpoints `POST /coach/chat` (propose) → `POST /sessions/confirm` (validate) →
+   `GET /program` (read adaptations) are **built server-side**; the mobile client
+   that calls them is the remaining piece.*
 2. **Fetch (watch pulls from server).** Before a workout the watch calls
    `GET /v1/sessions/today?user_id=<id>` and caches it; offline ladder if the
    network is unreachable. **Built.**
@@ -72,13 +73,15 @@ is exactly how it already works today.
 The watch↔server JSON contract (`GET /sessions/today`, `POST /sessions/log`) lives
 in the root `CLAUDE.md` and is the source of truth. Keep that, this file, and
 `backend/README.md` in sync. The mobile↔server endpoints (`POST /coach/chat`,
-`POST /sessions/confirm`, `GET /program`) are specified there too — **designed,
-not yet implemented**.
+`POST /sessions/confirm`, `GET /program`) are specified there too and are now
+**implemented server-side** (the mobile client remains to be built).
 
 ## Status (2026-06-23)
 
 - ✅ Server brick: Claude generation (`claude-haiku-4-5`), durable persistence,
-  `POST /sessions/log`.
+  `POST /sessions/log`, and the mobile-facing coach-IA endpoints
+  (`POST /coach/chat`, `POST /sessions/confirm`, `GET /program`).
 - ✅ Watch brick: pull + offline resilience, local-first logging, full on-watch flow.
 - 🔜 Watch → server upload (the watch half of the adaptation loop).
-- 🆕 Mobile app + conversational coach-IA endpoints (the biggest new piece).
+- 🆕 Mobile app: the conversational coach-IA UI on top of the endpoints above
+  (the biggest new piece — server side is ready).

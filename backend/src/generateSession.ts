@@ -112,7 +112,8 @@ async function callClaude(userId: string): Promise<Session> {
 
 // Compact, human-readable digest of the last few logged sessions, fed to Claude
 // so it can progress or deload movement-by-movement. Empty when no history.
-async function recentHistorySummary(userId: string): Promise<string> {
+// Exported so the coach-IA (coach.ts) can give the same context to its proposals.
+export async function recentHistorySummary(userId: string): Promise<string> {
   const logs = await getHistory(userId);
   if (logs.length === 0) {
     return "";

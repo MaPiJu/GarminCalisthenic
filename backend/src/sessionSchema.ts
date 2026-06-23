@@ -98,3 +98,26 @@ export const LogPayloadSchema = z.object({
 
 export type SetResult = z.infer<typeof SetResultSchema>;
 export type LogPayload = z.infer<typeof LogPayloadSchema>;
+
+// ---------------------------------------------------------------------------
+// Mobile ↔ server payloads (the coach-IA companion). The phone is the only
+// caller; the flow is propose → confirm so nothing reaches the watch until the
+// athlete validates it (see ARCHITECTURE.md + the CLAUDE.md "Mobile ↔ server"
+// contract). These are request-body schemas — what the mobile app sends in.
+// ---------------------------------------------------------------------------
+
+// POST /v1/coach/chat — the athlete's free-text message to the coach.
+export const ChatPayloadSchema = z.object({
+  user_id: z.string(),
+  message: z.string(),
+});
+
+// POST /v1/sessions/confirm — the session the athlete accepted; the server then
+// stores it as today's session so GET /sessions/today serves it to the watch.
+export const ConfirmPayloadSchema = z.object({
+  user_id: z.string(),
+  session: SessionSchema,
+});
+
+export type ChatPayload = z.infer<typeof ChatPayloadSchema>;
+export type ConfirmPayload = z.infer<typeof ConfirmPayloadSchema>;
