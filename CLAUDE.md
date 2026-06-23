@@ -176,3 +176,35 @@ Auth gate returns 401 without a Bearer token. Generation model was switched from
 `claude-opus-4-8` to `claude-haiku-4-5` (cheaper/faster, keeps the 8 s watch
 budget safe). Next up is tracked separately: deploy + HTTPS (required for the
 watch's `makeWebRequest`), then the Phase C adaptation loop.
+
+## Roadmap — next steps (post Phase A)
+
+Phase A (real Claude generation + durable persistence) is done, and the watch's
+`POST /sessions/log` is built **server-side**. The contracts for the rest are
+specified above (see "Logging back results" and "Mobile ↔ server (planned)").
+Remaining work, in rough order:
+
+1. **Mobile-facing backend endpoints (backend/).** Implement the three designed
+   guichets: `POST /coach/chat` (athlete message → coach `reply` + a
+   `proposed_session`), `POST /sessions/confirm` (validate → store as today's
+   session; `GET /sessions/today` already serves whatever is in `sessionStore`),
+   `GET /program` (today + `recent_changes`). Backend-only, testable on localhost;
+   fall back to a sample like `generateSession` when no `ANTHROPIC_API_KEY`. Reuse
+   the existing patterns (`sessionStore`, `zodOutputFormat`, `requireBearer`).
+   **Status: designed, not implemented.**
+2. **Watch → server upload (watch/).** Make the on-watch app POST its local per-set
+   log to `POST /sessions/log` after the workout (hook into the finish flow; queue
+   locally, send when online). Map the watch's `actual_reps` / `actual_hold_seconds`
+   → the contract's `achieved_*`, and derive `completed` (achieved ≥ target; a
+   "to-failure" set counts as completed). Reuse `source/data/ApiConfig.mc`
+   (BASE_URL, auth). Testable against `http://localhost` in the **simulator**; the
+   **physical device needs HTTPS** (a tunnel — Cloudflare/ngrok — or a real deploy).
+   Note: Monkey C cannot be compiled in the cloud agent env (no Garmin SDK), so this
+   is written here but **built/tested by the user**. **Status: not started.**
+3. **Mobile companion brick (mobile/).** The conversational coach-IA UI that calls
+   the endpoints from (1), plus viewing the adapting program. Talks only to the
+   server (see `ARCHITECTURE.md`). The biggest new piece. **Status: not started.**
+
+Also tracked separately: **deploy + HTTPS** for the backend — required for the
+watch's `makeWebRequest` on a real device, and what unblocks (2) on the physical
+watch.
