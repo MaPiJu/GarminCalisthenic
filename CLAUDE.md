@@ -3,6 +3,10 @@
 Top-level project memory. Each **brick** keeps its own detailed `CLAUDE.md`;
 this file is just the map and the one thing both bricks must agree on.
 
+> **Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first for cross-brick design** — the
+> hub model and how the mobile app, server, and watch interact (decision: the
+> watch pulls from the server; clients never talk to each other directly).
+
 ## Layout
 
 ```
@@ -84,6 +88,8 @@ Headers: Authorization: Bearer <token>, Content-Type: application/json
 
 ## Working in this repo
 
+- New here, or designing across bricks? Read **`ARCHITECTURE.md`** (hub model +
+  mobile/server/watch flows) before touching the cross-brick wiring.
 - Touching the watch app? Read and update **`watch/CLAUDE.md`** (it has the
   device matrix, flow, and the per-session "Current state" log).
 - Building the backend? Put it under `backend/` and keep its responses byte-for-
