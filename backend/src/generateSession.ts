@@ -87,7 +87,7 @@ async function produceSession(userId: string, key: string): Promise<Session> {
 
 async function callClaude(userId: string): Promise<Session> {
   const response = await client!.messages.parse({
-    model: "claude-opus-4-8",
+    model: "claude-haiku-4-5",
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
     output_config: { format: zodOutputFormat(SessionSchema) },

@@ -25,7 +25,7 @@ this file is just the map and the one thing both bricks must agree on.
   architecture and current state live in **`watch/CLAUDE.md`**.
 - **backend/** — the "coach IA" service (Node/TS, Express + Anthropic SDK). One
   endpoint, `GET /v1/sessions/today`, generates a session with Claude
-  (`claude-opus-4-8`, structured outputs) and returns the JSON contract below;
+  (`claude-haiku-4-5`, structured outputs) and returns the JSON contract below;
   serves a built-in sample when no `ANTHROPIC_API_KEY` is set. The watch speaks to
   it through `watch/source/data/ApiConfig.mc` (endpoint, auth, timeout) +
   `SessionRepository.fetchSession()` (one grouped request, offline fallback).
@@ -79,7 +79,7 @@ Phase A closes that — it lives entirely under `backend/`, no watch changes.
   hit `GET /v1/sessions/today` — the response should now be a *Claude-generated*
   session (varied each athlete/day), not the sample.
 - Why / role: validates the **core "coach IA"** end-to-end — that Claude
-  (`claude-opus-4-8`) + structured outputs (the Zod schema in
+  (`claude-haiku-4-5`) + structured outputs (the Zod schema in
   `src/sessionSchema.ts`) reliably produce a session that satisfies the shared
   contract. This is the proof the whole architecture was built for.
 - Note: no code change needed — `src/generateSession.ts` already instantiates
