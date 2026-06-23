@@ -58,6 +58,30 @@ exercise (`target_reps` may be `null` = "to failure"). Any non-200 / transport
 error / timeout ⇒ the watch falls back to its last cached session, then to the
 bundled mock — **the network is never touched during a workout.**
 
+### Logging back results (Phase C, additive — optional)
+
+After a workout the watch may POST what was actually done, so the **next** day's
+session adapts (progress when targets are met, hold/regress when missed). This is
+additive: generation works fine with no logged history, so the watch can adopt it
+whenever.
+
+```
+POST {BASE_URL}/sessions/log
+Headers: Authorization: Bearer <token>, Content-Type: application/json
+{
+  "user_id": "string",
+  "session_id": "string",            // the session these results belong to
+  "results": [
+    { "exercise": "string",
+      "target_reps": number | null,
+      "target_hold_seconds": number | null,
+      "achieved_reps": number | null,
+      "achieved_hold_seconds": number | null,
+      "completed": boolean } ]
+}
+200 application/json: { "ok": true }
+```
+
 ## Working in this repo
 
 - Touching the watch app? Read and update **`watch/CLAUDE.md`** (it has the

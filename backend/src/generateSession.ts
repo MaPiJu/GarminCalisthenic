@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { SessionSchema, sampleSession, sessionIdFor, type Session } from "./sessionSchema";
 import { getSession, putSession } from "./sessionStore";
+import { getHistory } from "./historyStore";
 
 // ---------------------------------------------------------------------------
 // The "coach IA": asks Claude to generate today's calisthenics session and
@@ -27,6 +28,9 @@ const SYSTEM_PROMPT = [
   "- For an isometric hold (plank, hollow hold, L-sit, wall sit, dead hang):",
   "  set target_hold_seconds (a positive integer) and target_reps = null.",
   "- rest_seconds is the rest after each set (0-180), realistic for the effort.",
+  "- If recent performance is provided, ADAPT: progress (more reps/sets or a harder",
+  "  variation) for movements whose targets were met, and hold or regress those that",
+  "  were missed. With no history, generate a balanced session.",
   "- session_id will be overwritten by the server; put any non-empty string.",
   "- Give session_name a short, motivating title.",
 ].join("\n");
@@ -86,21 +90,51 @@ async function produceSession(userId: string, key: string): Promise<Session> {
 }
 
 async function callClaude(userId: string): Promise<Session> {
+  const history = await recentHistorySummary(userId);
+  const userContent = history
+    ? `Generate today's calisthenics session for athlete "${userId}".\n\n` +
+      `Recent performance — adapt difficulty accordingly:\n${history}`
+    : `Generate today's calisthenics session for athlete "${userId}".`;
+
   const response = await client!.messages.parse({
     model: "claude-haiku-4-5",
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
     output_config: { format: zodOutputFormat(SessionSchema) },
-    messages: [
-      {
-        role: "user",
-        content: `Generate today's calisthenics session for athlete "${userId}".`,
-      },
-    ],
+    messages: [{ role: "user", content: userContent }],
   });
 
   if (response.stop_reason === "refusal" || response.parsed_output == null) {
     throw new Error(`no usable output (stop_reason=${response.stop_reason})`);
   }
   return response.parsed_output;
+}
+
+// Compact, human-readable digest of the last few logged sessions, fed to Claude
+// so it can progress or deload movement-by-movement. Empty when no history.
+async function recentHistorySummary(userId: string): Promise<string> {
+  const logs = await getHistory(userId);
+  if (logs.length === 0) {
+    return "";
+  }
+  const lines: string[] = [];
+  for (const log of logs.slice(-3)) {
+    lines.push(`Session ${log.date}:`);
+    for (const r of log.results) {
+      const target =
+        r.target_hold_seconds != null
+          ? `${r.target_hold_seconds}s hold`
+          : r.target_reps != null
+            ? `${r.target_reps} reps`
+            : "to failure";
+      const achieved =
+        r.achieved_hold_seconds != null
+          ? `${r.achieved_hold_seconds}s`
+          : r.achieved_reps != null
+            ? `${r.achieved_reps} reps`
+            : "n/a";
+      lines.push(`  - ${r.exercise}: target ${target}, did ${achieved}${r.completed ? "" : " (missed)"}`);
+    }
+  }
+  return lines.join("\n");
 }

@@ -66,6 +66,33 @@ Rules: `target_hold_seconds != null && > 0` ⇒ isometric hold; otherwise reps
 with a deterministic `"<user_id>-<YYYY-MM-DD>"` so the watch's local log key and
 offline cache stay stable for the day.
 
+### Logging results back (Phase C, additive)
+
+After a workout the watch may report what was actually done; the **next** day's
+generation adapts from it (progress when targets are met, hold/regress when
+missed). Optional — generation works fine with no history.
+
+```
+POST /v1/sessions/log
+Headers:
+  Authorization: Bearer <token>
+  Content-Type: application/json
+Body:
+  {
+    "user_id": "string",
+    "session_id": "string",
+    "results": [
+      { "exercise": "string",
+        "target_reps": number | null,
+        "target_hold_seconds": number | null,
+        "achieved_reps": number | null,
+        "achieved_hold_seconds": number | null,
+        "completed": boolean }
+    ]
+  }
+→ 200 { "ok": true }   (400 on a malformed body, 401 without a valid token)
+```
+
 ## How it's wired
 
 - `src/sessionSchema.ts` — Zod schema = single source of truth for the contract,
@@ -73,12 +100,17 @@ offline cache stay stable for the day.
 - `src/generateSession.ts` — calls Claude via `messages.parse()` +
   `zodOutputFormat` (structured outputs, so the model's response validates).
   Reads/writes the durable store per athlete+day and dedups concurrent
-  generations; falls back to the sample on any error.
+  generations; folds the athlete's recent logged history into the prompt so the
+  session adapts; falls back to the sample on any error.
 - `src/sessionStore.ts` — durable persistence: a JSON file keyed by
   `<user_id>-<YYYY-MM-DD>` (path = `SESSIONS_DB_PATH`, default `./data/sessions.json`,
   gitignored). A generated session survives restarts and stays stable for the
   day. Writes are atomic (temp file + rename) and serialized.
-- `src/server.ts` — Express, Bearer-token gate, the single GET route.
+- `src/historyStore.ts` — durable logged-history store (Phase C): per-athlete
+  workout results from `POST /sessions/log` (path = `HISTORY_DB_PATH`, default
+  `./data/history.json`, gitignored). Same atomic/serialized write discipline.
+- `src/server.ts` — Express, Bearer-token gate, the `GET /sessions/today` and
+  `POST /sessions/log` routes.
 
 ## Connecting the watch
 

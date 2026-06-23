@@ -33,3 +33,20 @@ Accept: application/json
 ### Missing token — should return 401 unauthorized
 GET {{baseUrl}}/v1/sessions/today?user_id={{userId}}
 Accept: application/json
+
+### Log what was actually done (Phase C) — feeds the NEXT day's adaptation
+# To see adaptation now: POST this, then delete backend/data/sessions.json
+# (keep history.json) and re-run the GET above — the new session should react.
+POST {{baseUrl}}/v1/sessions/log
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "session_id": "{{userId}}-2026-06-23",
+  "results": [
+    { "exercise": "Push-ups", "target_reps": 12, "target_hold_seconds": null, "achieved_reps": 12, "achieved_hold_seconds": null, "completed": true },
+    { "exercise": "Dips", "target_reps": 8, "target_hold_seconds": null, "achieved_reps": 5, "achieved_hold_seconds": null, "completed": false },
+    { "exercise": "Plank", "target_reps": null, "target_hold_seconds": 45, "achieved_reps": null, "achieved_hold_seconds": 30, "completed": false }
+  ]
+}
