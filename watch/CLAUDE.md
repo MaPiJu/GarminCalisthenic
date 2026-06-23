@@ -140,7 +140,7 @@ exercise. After the last set → FinishView (sets done, total reps, elapsed).
 
 ## Current state
 
-Updated: 2026-06-22
+Updated: 2026-06-23
 
 Done:
 - Project scaffold: `manifest.xml` (5 devices, minApiLevel 3.1.0), `monkey.jungle`
@@ -218,8 +218,45 @@ Done:
     centre (~1223,300); capture with `screencapture -R<win-rect>`. HTTP path tests
     use a local `python3 -m http.server`-style server + Settings → *Use Device
     HTTPS Requirements* toggled OFF so `http://127.0.0.1` is accepted.
+- **Watch → server upload (the watch half of the adaptation loop) — written,
+  awaiting a simulator build.** After a workout the app now POSTs what was
+  actually done to `POST {BASE_URL}/sessions/log`, so the next day's generation
+  adapts. Store-and-forward, additive, and the workout still never touches the
+  network:
+  - `ApiConfig.mc` gains `logUrl()` (`BASE_URL + "/sessions/log"`) and
+    `uploadHeaders()` (`Authorization` + `Content-Type: application/json`); the
+    POST contract is documented next to the GET one.
+  - `SessionLogger.resultsForUpload(sessionId)` reads the local `log:<id>` array
+    and maps each validated set onto the server contract: `actual_reps` /
+    `actual_hold_seconds` → `achieved_*`, and derives `completed` (held ≥ target,
+    or reps ≥ target; a *to-failure* set counts as completed once any reps were
+    logged). One result entry per set.
+  - New `data/LogUploader.mc` — durable store-and-forward queue in `Storage`
+    (`upload_queue`, bounded, de-duped per `session_id`). `flush()` drains it
+    sequentially, one `makeWebRequest` in flight, with the SAME timeout-guard +
+    fire-once discipline as `SessionRepository`. Dequeue policy: `200` → drop &
+    continue; any other HTTP code (server reached, body rejected) → drop too so a
+    poison item can't block the queue; transport error / timeout (offline) → keep
+    & stop, retried on a later flush.
+  - `WorkoutController`: holds a `LogUploader`; `showFinish()` enqueues the
+    finished log + `flush()`es it; `beginLoad()` also `flush()`es at launch, so a
+    log that couldn't go out earlier (no phone / BLE / server down) is retried on
+    the next connected run. The summary/`endSession` path is unchanged.
+  - **Note on nulls:** the server schema is strict (`.nullable()`, not optional),
+    so each result MUST carry all six keys; the watch emits explicit `null`s and
+    relies on CIQ's JSON serializer including null-valued Dictionary entries.
+    Verified cross-brick against the real backend `POST /v1/sessions/log` (payload
+    accepted → 200, history persisted; omitting the null keys → 400). **Monkey C
+    was NOT compiled here (no Garmin SDK in the agent env) — build & simulator-test
+    this on the user's machine** (localhost is fine in the simulator with *Use
+    Device HTTPS Requirements* OFF; the physical device needs HTTPS).
 
 To do / next sessions:
+- **Build & simulator-test the watch → server upload** (written above, never
+  compiled here): finish a workout against a local backend with *Use Device HTTPS
+  Requirements* OFF, confirm one `POST /sessions/log` (200, server `history.json`
+  grows); then kill the server, finish another workout (stays queued), restart the
+  app online and confirm the queued log flushes on launch.
 - (Optional) repeat the 4 fetch paths on the other 4 devices; behaviour is
   device-agnostic (seam is isolated in `SessionRepository`), so fenix7x is
   representative.
@@ -232,7 +269,6 @@ To do / next sessions:
   provision `user_id`/`auth_token` (companion pairing).
 - Decide & flesh out `RecordingHook` (lap markers per set, etc.) — `Fit`
   permission already in manifest.
-- Optional: persist/queue finished-session logs for later upload by the companion.
 - Polish: long-name truncation per screen size, count-up hold option, settings.
 - **Exercise GIF/animation integration (future):** Garmin embeds animated exercise
   illustrations (push-ups, pull-ups, etc.) in its built-in workout app. These are

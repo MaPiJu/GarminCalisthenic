@@ -51,8 +51,9 @@ is exactly how it already works today.
    set, runs the timers, and logs every set locally and immediately — zero network
    during the workout. **Built.**
 4. **Upload (watch → server).** After the workout the watch POSTs the actual results
-   to `POST /v1/sessions/log` (logged locally, sent when online). *Server half built;
-   watch half to build.*
+   to `POST /v1/sessions/log` (logged locally, queued, sent when online). *Both
+   halves built: server live; the watch's store-and-forward upload is written and
+   awaiting a simulator build (no Garmin SDK in the agent env).*
 5. **Analyze + adapt (server, then mobile reads).** The server folds the logged
    history into the next generation (progress when targets met, hold/regress when
    missed); the mobile app reads the adapted program back from the server.
@@ -82,6 +83,7 @@ in the root `CLAUDE.md` and is the source of truth. Keep that, this file, and
   `POST /sessions/log`, and the mobile-facing coach-IA endpoints
   (`POST /coach/chat`, `POST /sessions/confirm`, `GET /program`).
 - ✅ Watch brick: pull + offline resilience, local-first logging, full on-watch flow.
-- 🔜 Watch → server upload (the watch half of the adaptation loop).
+- 🛠 Watch → server upload (the watch half of the adaptation loop): written,
+  awaiting a simulator build/test (no Garmin SDK in the agent env).
 - 🆕 Mobile app: the conversational coach-IA UI on top of the endpoints above
   (the biggest new piece — server side is ready).

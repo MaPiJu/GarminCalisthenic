@@ -16,6 +16,7 @@ class WorkoutController {
     public var loadStatus;          // :ok / :offlineCache / :offlineMock / :error / null
 
     private var _logger;
+    private var _uploader;          // store-and-forward upload of finished logs
     private var _repo;              // kept alive across the async fetch
     private var _loadingView;       // LoadingView, notified on hard failure
     private var _flat;              // Array of [blockName, Exercise]
@@ -29,6 +30,7 @@ class WorkoutController {
 
     function initialize() {
         _logger = new SessionLogger();
+        _uploader = new LogUploader();
         _exIndex = 0;
         _setIndex = 1;
         totalSets = 0;
@@ -44,6 +46,10 @@ class WorkoutController {
     function beginLoad(loadingView) {
         _loadingView = loadingView;
         loadStatus = null;
+        // App just launched and is about to use the network: a good moment to
+        // retry any finished-workout logs that couldn't be uploaded earlier
+        // (store-and-forward). Independent of the session fetch below.
+        _uploader.flush();
         _repo = new SessionRepository();
         _repo.fetchSession(method(:onSessionLoaded));
     }
@@ -152,6 +158,11 @@ class WorkoutController {
         RecordingHook.stop(true); // no-op on constrained variants
         var elapsed = (System.getTimer() - _startMs) / 1000;
         _logger.endSession(session, completedSets, totalSets, totalReps, elapsed);
+        // Hand the per-set log to the upload queue and try to ship it now. If
+        // we're offline it stays queued and goes out on a later launch — the
+        // workout never waited on the network.
+        _uploader.enqueue(ApiConfig.userId(), session.id, _logger.resultsForUpload(session.id));
+        _uploader.flush();
         var view = new FinishView(self, elapsed);
         WatchUi.switchToView(view, new ScreenDelegate(view), WatchUi.SLIDE_UP);
     }

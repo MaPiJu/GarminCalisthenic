@@ -202,15 +202,25 @@ Remaining work, in rough order:
    confirmed session; `GET /program`; 401 without a token; 400 on bad payloads;
    `tsc --strict` clean; the watch GET is non-regressed. The mobile client that
    calls these (point 3) is the remaining piece.
-2. **Watch → server upload (watch/).** Make the on-watch app POST its local per-set
-   log to `POST /sessions/log` after the workout (hook into the finish flow; queue
-   locally, send when online). Map the watch's `actual_reps` / `actual_hold_seconds`
-   → the contract's `achieved_*`, and derive `completed` (achieved ≥ target; a
-   "to-failure" set counts as completed). Reuse `source/data/ApiConfig.mc`
-   (BASE_URL, auth). Testable against `http://localhost` in the **simulator**; the
-   **physical device needs HTTPS** (a tunnel — Cloudflare/ngrok — or a real deploy).
-   Note: Monkey C cannot be compiled in the cloud agent env (no Garmin SDK), so this
-   is written here but **built/tested by the user**. **Status: not started.**
+2. **Watch → server upload (watch/). ✅ WRITTEN — awaiting a simulator build.** The
+   on-watch app now POSTs its local per-set log to `POST /sessions/log` after the
+   workout, so the next day's generation adapts. Store-and-forward and additive —
+   the workout still never touches the network. `ApiConfig.mc` gains `logUrl()` +
+   `uploadHeaders()`; `SessionLogger.resultsForUpload()` maps `actual_reps` /
+   `actual_hold_seconds` → the contract's `achieved_*` and derives `completed`
+   (achieved ≥ target; a "to-failure" set counts as completed once any reps were
+   logged); new `data/LogUploader.mc` is a durable, bounded, de-duped queue in
+   `Storage` drained sequentially with the same timeout-guard + fire-once
+   discipline as `SessionRepository` (200 → drop & continue; other HTTP code → drop
+   so a poison item can't block the queue; transport error/timeout → keep & retry
+   on a later flush). `WorkoutController` enqueues + flushes at finish and also
+   flushes at launch ("send when online"). The cross-brick contract was validated
+   against the real backend `POST /v1/sessions/log` (payload accepted → 200,
+   history persisted; the derived `completed` flags correct for met/missed/hold/
+   to-failure). Note: Monkey C cannot be compiled in the agent env (no Garmin SDK),
+   so this is written here but **built/simulator-tested by the user** (localhost is
+   fine in the simulator; the **physical device needs HTTPS** — a tunnel or a real
+   deploy). See `watch/CLAUDE.md` "Current state" for the build/test checklist.
 3. **Mobile companion brick (mobile/).** The conversational coach-IA UI that calls
    the endpoints from (1), plus viewing the adapting program. Talks only to the
    server (see `ARCHITECTURE.md`). The biggest new piece. **Status: not started.**
