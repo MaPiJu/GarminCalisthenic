@@ -86,6 +86,36 @@ Headers: Authorization: Bearer <token>, Content-Type: application/json
 200 application/json: { "ok": true }
 ```
 
+### Mobile ↔ server (planned — coach-IA companion)
+
+The mobile companion app talks **only to the server** (see `ARCHITECTURE.md`).
+These endpoints are **designed, not yet implemented**. The flow is propose →
+confirm, so nothing reaches the watch until the athlete validates it. `<Session>`
+is the exact session shape from `GET /sessions/today` above.
+
+```
+# A — talk to the coach, get a proposal
+POST {BASE_URL}/coach/chat
+Headers: Authorization: Bearer <token>, Content-Type: application/json
+{ "user_id": "string", "message": "string" }   // the athlete's free-text message
+200 application/json:
+{ "reply": "string",                            // the coach's text reply
+  "proposed_session": <Session> | null }        // attached once it has enough to propose
+
+# B — confirm the day's session (this is what the watch then pulls)
+POST {BASE_URL}/sessions/confirm
+Headers: Authorization: Bearer <token>, Content-Type: application/json
+{ "user_id": "string", "session": <Session> }   // the session the athlete accepted
+200 application/json: { "ok": true }
+
+# C — read the current program + recent adaptations
+GET {BASE_URL}/program?user_id=<id>
+Headers: Authorization: Bearer <token>, Accept: application/json
+200 application/json:
+{ "today": <Session> | null,                     // confirmed session of the day (null if none)
+  "recent_changes": [ "string", ... ] }          // human-readable adaptation notes
+```
+
 ## Working in this repo
 
 - New here, or designing across bricks? Read **`ARCHITECTURE.md`** (hub model +

@@ -41,7 +41,8 @@ is exactly how it already works today.
 
 1. **Define / adapt (mobile ⇄ server).** The athlete chats with the coach-IA in the
    mobile app; the server asks Claude and stores the resulting session + program.
-   *New work: mobile app + conversational server endpoints.*
+   *Planned endpoints: `POST /coach/chat` (propose) → `POST /sessions/confirm`
+   (validate) → `GET /program` (read adaptations) — specified in `CLAUDE.md`.*
 2. **Fetch (watch pulls from server).** Before a workout the watch calls
    `GET /v1/sessions/today?user_id=<id>` and caches it; offline ladder if the
    network is unreachable. **Built.**
@@ -70,8 +71,9 @@ is exactly how it already works today.
 
 The watch↔server JSON contract (`GET /sessions/today`, `POST /sessions/log`) lives
 in the root `CLAUDE.md` and is the source of truth. Keep that, this file, and
-`backend/README.md` in sync. New mobile↔server endpoints will be added to the
-contract when that brick is designed.
+`backend/README.md` in sync. The mobile↔server endpoints (`POST /coach/chat`,
+`POST /sessions/confirm`, `GET /program`) are specified there too — **designed,
+not yet implemented**.
 
 ## Status (2026-06-23)
 
