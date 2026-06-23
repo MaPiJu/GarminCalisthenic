@@ -3,6 +3,10 @@
 Top-level project memory. Each **brick** keeps its own detailed `CLAUDE.md`;
 this file is just the map and the one thing both bricks must agree on.
 
+> **Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first for cross-brick design** — the
+> hub model and how the mobile app, server, and watch interact (decision: the
+> watch pulls from the server; clients never talk to each other directly).
+
 ## Layout
 
 ```
@@ -25,7 +29,7 @@ this file is just the map and the one thing both bricks must agree on.
   architecture and current state live in **`watch/CLAUDE.md`**.
 - **backend/** — the "coach IA" service (Node/TS, Express + Anthropic SDK). One
   endpoint, `GET /v1/sessions/today`, generates a session with Claude
-  (`claude-opus-4-8`, structured outputs) and returns the JSON contract below;
+  (`claude-haiku-4-5`, structured outputs) and returns the JSON contract below;
   serves a built-in sample when no `ANTHROPIC_API_KEY` is set. The watch speaks to
   it through `watch/source/data/ApiConfig.mc` (endpoint, auth, timeout) +
   `SessionRepository.fetchSession()` (one grouped request, offline fallback).
@@ -58,8 +62,65 @@ exercise (`target_reps` may be `null` = "to failure"). Any non-200 / transport
 error / timeout ⇒ the watch falls back to its last cached session, then to the
 bundled mock — **the network is never touched during a workout.**
 
+### Logging back results (Phase C, additive — optional)
+
+After a workout the watch may POST what was actually done, so the **next** day's
+session adapts (progress when targets are met, hold/regress when missed). This is
+additive: generation works fine with no logged history, so the watch can adopt it
+whenever.
+
+```
+POST {BASE_URL}/sessions/log
+Headers: Authorization: Bearer <token>, Content-Type: application/json
+{
+  "user_id": "string",
+  "session_id": "string",            // the session these results belong to
+  "results": [
+    { "exercise": "string",
+      "target_reps": number | null,
+      "target_hold_seconds": number | null,
+      "achieved_reps": number | null,
+      "achieved_hold_seconds": number | null,
+      "completed": boolean } ]
+}
+200 application/json: { "ok": true }
+```
+
+### Mobile ↔ server (coach-IA companion)
+
+The mobile companion app talks **only to the server** (see `ARCHITECTURE.md`).
+These three endpoints are **implemented server-side** (under `/v1`); the mobile
+client that calls them is the remaining piece. The flow is propose → confirm, so
+nothing reaches the watch until the athlete validates it. `<Session>` is the exact
+session shape from `GET /sessions/today` above.
+
+```
+# A — talk to the coach, get a proposal
+POST {BASE_URL}/coach/chat
+Headers: Authorization: Bearer <token>, Content-Type: application/json
+{ "user_id": "string", "message": "string" }   // the athlete's free-text message
+200 application/json:
+{ "reply": "string",                            // the coach's text reply
+  "proposed_session": <Session> | null }        // attached once it has enough to propose
+
+# B — confirm the day's session (this is what the watch then pulls)
+POST {BASE_URL}/sessions/confirm
+Headers: Authorization: Bearer <token>, Content-Type: application/json
+{ "user_id": "string", "session": <Session> }   // the session the athlete accepted
+200 application/json: { "ok": true }
+
+# C — read the current program + recent adaptations
+GET {BASE_URL}/program?user_id=<id>
+Headers: Authorization: Bearer <token>, Accept: application/json
+200 application/json:
+{ "today": <Session> | null,                     // confirmed session of the day (null if none)
+  "recent_changes": [ "string", ... ] }          // human-readable adaptation notes
+```
+
 ## Working in this repo
 
+- New here, or designing across bricks? Read **`ARCHITECTURE.md`** (hub model +
+  mobile/server/watch flows) before touching the cross-brick wiring.
 - Touching the watch app? Read and update **`watch/CLAUDE.md`** (it has the
   device matrix, flow, and the per-session "Current state" log).
 - Building the backend? Put it under `backend/` and keep its responses byte-for-
@@ -79,23 +140,91 @@ Phase A closes that — it lives entirely under `backend/`, no watch changes.
   hit `GET /v1/sessions/today` — the response should now be a *Claude-generated*
   session (varied each athlete/day), not the sample.
 - Why / role: validates the **core "coach IA"** end-to-end — that Claude
-  (`claude-opus-4-8`) + structured outputs (the Zod schema in
+  (`claude-haiku-4-5`) + structured outputs (the Zod schema in
   `src/sessionSchema.ts`) reliably produce a session that satisfies the shared
   contract. This is the proof the whole architecture was built for.
 - Note: no code change needed — `src/generateSession.ts` already instantiates
   `new Anthropic()` (reads `ANTHROPIC_API_KEY`) and falls back to the sample when
   the key is absent. Step 1 is configuration + observation only.
 
-**Step 2 — Durable persistence.**
-- What: replace the in-memory `Map` cache in `src/generateSession.ts` with a
-  durable store (start simple: SQLite or a JSON file), keyed by `user_id` + date.
+**Step 2 — Durable persistence. ✅ DONE.**
+- What: the in-memory `Map` cache in `src/generateSession.ts` is replaced by
+  `src/sessionStore.ts` — a durable JSON store keyed by `user_id` + date
+  (`SESSIONS_DB_PATH`, default `backend/data/sessions.json`, gitignored). Atomic
+  writes (temp file + rename), serialized; concurrent generations for the same
+  athlete+day are deduped to a single in-flight Claude call.
 - Why / role: today a generated session is lost on restart. Persistence makes
   "today's session" stable across restarts and is the **prerequisite for the
   day-to-day adaptation loop** (later Phase C: feeding logged history back to
   Claude). It also lets the 8 s watch budget stay safe — a stored session is
   served instantly instead of regenerated.
+- Nuance: a Claude-generated session is persisted; when a key is present but
+  generation fails transiently, the sample is served but **not** persisted, so
+  the next request retries real generation instead of locking in a degraded plan.
 
 **Done when:** a real Claude-generated session is served and validates against
 the contract (Step 1), and repeated/after-restart GETs for the same athlete+day
 return the same stored session (Step 2). Later phases (deploy + HTTPS, the
 adaptation loop, watch polish) are tracked separately when Phase A lands.
+
+**Status (2026-06-23): Phase A ✅ COMPLETE — validated end-to-end.** With a real
+`ANTHROPIC_API_KEY` in `backend/.env`, `GET /v1/sessions/today` returns a session
+**generated by Claude (`claude-haiku-4-5`)** — not the bundled sample — that
+satisfies the contract (Step 1). Repeated GETs for the same athlete+day are
+byte-identical, distinct `user_id`s get distinct sessions, and the served session
+is persisted to `backend/data/sessions.json` and reused across restarts (Step 2).
+Auth gate returns 401 without a Bearer token. Generation model was switched from
+`claude-opus-4-8` to `claude-haiku-4-5` (cheaper/faster, keeps the 8 s watch
+budget safe). Next up is tracked separately: deploy + HTTPS (required for the
+watch's `makeWebRequest`), then the Phase C adaptation loop.
+
+## Roadmap — next steps (post Phase A)
+
+Phase A (real Claude generation + durable persistence) is done, the watch's
+`POST /sessions/log` is built **server-side**, and the three mobile-facing
+endpoints (point 1) are now implemented too. The contracts are specified above
+(see "Logging back results" and "Mobile ↔ server (coach-IA companion)").
+Remaining work, in rough order:
+
+1. **Mobile-facing backend endpoints (backend/). ✅ DONE.** The three guichets are
+   live under `/v1`, additive (the watch's `GET /sessions/today` + `POST
+   /sessions/log` are untouched): `POST /v1/coach/chat` (athlete message → coach
+   `reply` + a `proposed_session`, via Claude structured outputs in `src/coach.ts`),
+   `POST /v1/sessions/confirm` (validate → `putSession` under the athlete+day key,
+   so `GET /sessions/today` then serves exactly the confirmed session), `GET
+   /v1/program` (today's stored session + `recent_changes`). The coach conversation
+   and the adaptation notes persist per `user_id` in `src/coachStore.ts` (same
+   atomic/serialized JSON discipline as `sessionStore`/`historyStore`,
+   `COACH_DB_PATH`, default `./data/coach.json`). Reuses `requireBearer`,
+   `zodOutputFormat`, `sessionStore`, and the in-sample fallback (`coach/chat`
+   proposes the sample, `confirm`/`program` work) when no `ANTHROPIC_API_KEY`.
+   Validated on localhost: propose → confirm → `GET /sessions/today` returns the
+   confirmed session; `GET /program`; 401 without a token; 400 on bad payloads;
+   `tsc --strict` clean; the watch GET is non-regressed. The mobile client that
+   calls these (point 3) is the remaining piece.
+2. **Watch → server upload (watch/). ✅ WRITTEN — awaiting a simulator build.** The
+   on-watch app now POSTs its local per-set log to `POST /sessions/log` after the
+   workout, so the next day's generation adapts. Store-and-forward and additive —
+   the workout still never touches the network. `ApiConfig.mc` gains `logUrl()` +
+   `uploadHeaders()`; `SessionLogger.resultsForUpload()` maps `actual_reps` /
+   `actual_hold_seconds` → the contract's `achieved_*` and derives `completed`
+   (achieved ≥ target; a "to-failure" set counts as completed once any reps were
+   logged); new `data/LogUploader.mc` is a durable, bounded, de-duped queue in
+   `Storage` drained sequentially with the same timeout-guard + fire-once
+   discipline as `SessionRepository` (200 → drop & continue; other HTTP code → drop
+   so a poison item can't block the queue; transport error/timeout → keep & retry
+   on a later flush). `WorkoutController` enqueues + flushes at finish and also
+   flushes at launch ("send when online"). The cross-brick contract was validated
+   against the real backend `POST /v1/sessions/log` (payload accepted → 200,
+   history persisted; the derived `completed` flags correct for met/missed/hold/
+   to-failure). Note: Monkey C cannot be compiled in the agent env (no Garmin SDK),
+   so this is written here but **built/simulator-tested by the user** (localhost is
+   fine in the simulator; the **physical device needs HTTPS** — a tunnel or a real
+   deploy). See `watch/CLAUDE.md` "Current state" for the build/test checklist.
+3. **Mobile companion brick (mobile/).** The conversational coach-IA UI that calls
+   the endpoints from (1), plus viewing the adapting program. Talks only to the
+   server (see `ARCHITECTURE.md`). The biggest new piece. **Status: not started.**
+
+Also tracked separately: **deploy + HTTPS** for the backend — required for the
+watch's `makeWebRequest` on a real device, and what unblocks (2) on the physical
+watch.

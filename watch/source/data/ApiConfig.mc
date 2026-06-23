@@ -1,4 +1,5 @@
 using Toybox.Application.Storage;
+using Toybox.Communications;
 
 // ---------------------------------------------------------------------------
 // Backend API contract + connection config.
@@ -29,6 +30,25 @@ using Toybox.Application.Storage;
 //   Any non-200 (or transport error / timeout) -> the client falls back to the
 //   last session cached in Storage, then to the bundled mock (see
 //   SessionRepository). The network is touched ONLY before the workout starts.
+//
+//   POST {BASE_URL}/sessions/log
+//   Headers:
+//     Authorization: Bearer <token>
+//     Content-Type: application/json
+//   Body (what the athlete actually did; one entry per validated set):
+//     {
+//       "user_id":    string,
+//       "session_id": string,
+//       "results": [
+//         { "exercise":             string,
+//           "target_reps":          number|null,
+//           "target_hold_seconds":  number|null,
+//           "achieved_reps":        number|null,
+//           "achieved_hold_seconds":number|null,
+//           "completed":            boolean } ]
+//     }
+//   Response 200 application/json: { "ok": true }. Uploaded AFTER the workout
+//   (never during it): queued locally and flushed when online (see LogUploader).
 //
 // Identity / auth are provisioned locally (e.g. by the future companion app at
 // pairing time) and read from Storage, with dev placeholders so the app runs
@@ -66,16 +86,33 @@ module ApiConfig {
         return BASE_URL + "/sessions/today";
     }
 
+    // Full URL for uploading what was actually done after a workout.
+    function logUrl() {
+        return BASE_URL + "/sessions/log";
+    }
+
     // Query parameters for the grouped per-session GET.
     function requestParams() {
         return { "user_id" => userId() };
     }
 
-    // Request headers (auth + content negotiation).
+    // Request headers for the GET (auth + content negotiation).
     function headers() {
         return {
             "Authorization" => "Bearer " + authToken(),
             "Accept" => "application/json"
+        };
+    }
+
+    // Request headers for the log POST (auth + JSON body). The JSON content
+    // type makes makeWebRequest serialize the params Dictionary as a JSON body.
+    // Content-Type MUST be the CIQ enum constant (REQUEST_CONTENT_TYPE_JSON),
+    // not the "application/json" string: a string value is rejected by
+    // makeWebRequest as an invalid header field (response code -200).
+    function uploadHeaders() {
+        return {
+            "Authorization" => "Bearer " + authToken(),
+            "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON
         };
     }
 }

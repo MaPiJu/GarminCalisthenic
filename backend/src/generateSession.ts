@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { SessionSchema, sampleSession, sessionIdFor, type Session } from "./sessionSchema";
+import { getSession, putSession } from "./sessionStore";
+import { getHistory } from "./historyStore";
 
 // ---------------------------------------------------------------------------
 // The "coach IA": asks Claude to generate today's calisthenics session and
@@ -26,55 +28,114 @@ const SYSTEM_PROMPT = [
   "- For an isometric hold (plank, hollow hold, L-sit, wall sit, dead hang):",
   "  set target_hold_seconds (a positive integer) and target_reps = null.",
   "- rest_seconds is the rest after each set (0-180), realistic for the effort.",
+  "- If recent performance is provided, ADAPT: progress (more reps/sets or a harder",
+  "  variation) for movements whose targets were met, and hold or regress those that",
+  "  were missed. With no history, generate a balanced session.",
   "- session_id will be overwritten by the server; put any non-empty string.",
   "- Give session_name a short, motivating title.",
 ].join("\n");
 
-// In-memory cache keyed by athlete + day, so repeated GETs are instant and the
-// watch's short request budget isn't spent regenerating an identical plan.
-const cache = new Map<string, Session>();
+// Dedup concurrent generations for the same athlete+day: two near-simultaneous
+// GETs share a single in-flight promise instead of each calling Claude (which
+// costs money/latency and races on the store). Persistence itself lives in
+// sessionStore — a stored session survives restarts and stays stable all day.
+const inFlight = new Map<string, Promise<Session>>();
 
 export async function generateSession(userId: string): Promise<Session> {
   const key = sessionIdFor(userId);
-  const cached = cache.get(key);
-  if (cached) {
-    return cached;
+
+  const stored = await getSession(key);
+  if (stored) {
+    return stored;
   }
 
-  let session: Session;
+  const pending = inFlight.get(key);
+  if (pending) {
+    return pending;
+  }
+
+  const promise = produceSession(userId, key);
+  inFlight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    inFlight.delete(key);
+  }
+}
+
+async function produceSession(userId: string, key: string): Promise<Session> {
+  // No key configured: the sample IS the intended product, so persist it —
+  // it's deterministic and should stay stable for the day.
   if (client == null) {
-    session = sampleSession(userId);
-  } else {
-    try {
-      session = await callClaude(userId);
-    } catch (err) {
-      console.warn("[generateSession] generation failed, serving sample:", err);
-      session = sampleSession(userId);
-    }
+    const session = sampleSession(userId);
+    session.session_id = key; // server owns the id, regardless of the source
+    await putSession(key, session);
+    return session;
   }
 
-  // Server owns the id so it's deterministic regardless of what the model wrote.
-  session.session_id = key;
-  cache.set(key, session);
-  return session;
+  // Key present: try real generation and persist the result. On a transient
+  // failure, serve the sample but DON'T persist it — the next request retries
+  // real generation instead of being locked into a degraded plan for the day.
+  try {
+    const session = await callClaude(userId);
+    session.session_id = key;
+    await putSession(key, session);
+    return session;
+  } catch (err) {
+    console.warn("[generateSession] generation failed, serving sample (not persisted):", err);
+    const fallback = sampleSession(userId);
+    fallback.session_id = key;
+    return fallback;
+  }
 }
 
 async function callClaude(userId: string): Promise<Session> {
+  const history = await recentHistorySummary(userId);
+  const userContent = history
+    ? `Generate today's calisthenics session for athlete "${userId}".\n\n` +
+      `Recent performance — adapt difficulty accordingly:\n${history}`
+    : `Generate today's calisthenics session for athlete "${userId}".`;
+
   const response = await client!.messages.parse({
-    model: "claude-opus-4-8",
+    model: "claude-haiku-4-5",
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
     output_config: { format: zodOutputFormat(SessionSchema) },
-    messages: [
-      {
-        role: "user",
-        content: `Generate today's calisthenics session for athlete "${userId}".`,
-      },
-    ],
+    messages: [{ role: "user", content: userContent }],
   });
 
   if (response.stop_reason === "refusal" || response.parsed_output == null) {
     throw new Error(`no usable output (stop_reason=${response.stop_reason})`);
   }
   return response.parsed_output;
+}
+
+// Compact, human-readable digest of the last few logged sessions, fed to Claude
+// so it can progress or deload movement-by-movement. Empty when no history.
+// Exported so the coach-IA (coach.ts) can give the same context to its proposals.
+export async function recentHistorySummary(userId: string): Promise<string> {
+  const logs = await getHistory(userId);
+  if (logs.length === 0) {
+    return "";
+  }
+  const lines: string[] = [];
+  for (const log of logs.slice(-3)) {
+    lines.push(`Session ${log.date}:`);
+    for (const r of log.results) {
+      const target =
+        r.target_hold_seconds != null
+          ? `${r.target_hold_seconds}s hold`
+          : r.target_reps != null
+            ? `${r.target_reps} reps`
+            : "to failure";
+      const achieved =
+        r.achieved_hold_seconds != null
+          ? `${r.achieved_hold_seconds}s`
+          : r.achieved_reps != null
+            ? `${r.achieved_reps} reps`
+            : "n/a";
+      lines.push(`  - ${r.exercise}: target ${target}, did ${achieved}${r.completed ? "" : " (missed)"}`);
+    }
+  }
+  return lines.join("\n");
 }

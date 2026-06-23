@@ -59,4 +59,47 @@ class SessionLogger {
             "finished_at" => Time.now().value()
         });
     }
+
+    // Build the upload payload's `results` array from the locally stored log for
+    // a finished session: maps each validated set onto the server contract,
+    // translating actual_* -> achieved_* and deriving `completed`. One entry per
+    // set. Returns [] if nothing was logged (so the caller can skip the upload).
+    function resultsForUpload(sessionId) {
+        var results = [];
+        var log = Storage.getValue("log:" + sessionId);
+        if (log == null) {
+            return results;
+        }
+        var arr = log as Lang.Array;
+        for (var i = 0; i < arr.size(); i++) {
+            var e = arr[i] as Lang.Dictionary;
+            var targetReps = e.get("target_reps");
+            var targetHold = e.get("target_hold_seconds");
+            var achievedReps = e.get("actual_reps");
+            var achievedHold = e.get("actual_hold_seconds");
+            results.add({
+                "exercise" => e.get("exercise"),
+                "target_reps" => targetReps,
+                "target_hold_seconds" => targetHold,
+                "achieved_reps" => achievedReps,
+                "achieved_hold_seconds" => achievedHold,
+                "completed" => deriveCompleted(targetReps, achievedReps, targetHold, achievedHold)
+            });
+        }
+        return results;
+    }
+
+    // A set counts as completed when the athlete met the target: held at least
+    // as long as asked (isometric), or hit at least the target reps. A
+    // "to-failure" set (target_reps == null) counts as completed as soon as any
+    // reps were logged — there is no number to fall short of.
+    private function deriveCompleted(targetReps, achievedReps, targetHold, achievedHold) {
+        if (targetHold != null && targetHold > 0) {
+            return achievedHold != null && achievedHold >= targetHold;
+        }
+        if (targetReps == null) {
+            return achievedReps != null;
+        }
+        return achievedReps != null && achievedReps >= targetReps;
+    }
 }
