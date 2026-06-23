@@ -17,11 +17,15 @@ using Toybox.Timer;
 //
 // One request in flight at a time (sequential drain), with the same timeout-
 // guard + fire-once discipline as SessionRepository. Dequeue policy:
-//   - 200            -> server stored it: drop from queue, send the next.
-//   - other HTTP code-> server reached but rejected (400 malformed, 401, 5xx):
-//                       drop it too, so one bad item can't block the whole queue.
-//   - transport error / timeout (no phone, BLE) -> keep it queued, stop and
-//                       retry on a later flush (the genuinely-offline case).
+//   - 200          -> server stored it: drop from queue, send the next.
+//   - 400 / 401    -> the payload itself is the problem (malformed body / bad
+//                     token); retrying can't help, so drop it (one poison item
+//                     can't block the queue) and continue with the next.
+//   - 5xx / other  -> server reached but the failure is transient (server
+//                     error, or a 404 from a down/misrouted backend): KEEP it
+//                     queued, stop, and retry on a later flush.
+//   - transport error / timeout (no phone, BLE, host unreachable) -> KEEP it
+//                     queued, stop, retry on a later flush (genuinely offline).
 // ---------------------------------------------------------------------------
 
 class LogUploader {
@@ -121,16 +125,18 @@ class LogUploader {
             removeFromQueue(_inFlight.get("session_id"));
             _inFlight = null;
             sendNext();
-        } else if (responseCode > 0) {
-            // Reached the server but it rejected the body (400/401/5xx). Retrying
-            // the identical payload won't help and would block the queue, so drop
-            // it and move on to the next item.
+        } else if (responseCode == 400 || responseCode == 401) {
+            // Client error: the payload itself is the problem (malformed body /
+            // bad token). Retrying the identical item can't help and would block
+            // the queue, so drop it and move on to the next one.
             removeFromQueue(_inFlight.get("session_id"));
             _inFlight = null;
             sendNext();
         } else {
-            // Transport-level failure (no phone / BLE timeout): genuinely offline.
-            // Keep it queued and stop; the next flush (e.g. app launch) retries.
+            // Everything else is transient/recoverable: a server error (5xx), a
+            // 404 from a down/misrouted backend, or a negative transport/timeout
+            // code (no phone / BLE / host unreachable). Keep it queued and stop;
+            // a later flush (e.g. app launch) retries it. True store-and-forward.
             _inFlight = null;
         }
     }
@@ -153,7 +159,11 @@ class LogUploader {
             var arr = queue as Lang.Array;
             for (var i = 0; i < arr.size(); i++) {
                 var item = arr[i] as Lang.Dictionary;
-                if (item.get("session_id") != sessionId) {
+                // Compare by VALUE: item.get(...) is statically Object, so the
+                // != operator would do identity comparison and never match (the
+                // queue would never shrink -> no dedup, infinite resend loop).
+                var sid = item.get("session_id");
+                if (sid == null || !(sid as Lang.String).equals(sessionId)) {
                     kept.add(item);
                 }
             }

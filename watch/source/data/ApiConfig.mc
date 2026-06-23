@@ -1,4 +1,5 @@
 using Toybox.Application.Storage;
+using Toybox.Communications;
 
 // ---------------------------------------------------------------------------
 // Backend API contract + connection config.
@@ -105,10 +106,13 @@ module ApiConfig {
 
     // Request headers for the log POST (auth + JSON body). The JSON content
     // type makes makeWebRequest serialize the params Dictionary as a JSON body.
+    // Content-Type MUST be the CIQ enum constant (REQUEST_CONTENT_TYPE_JSON),
+    // not the "application/json" string: a string value is rejected by
+    // makeWebRequest as an invalid header field (response code -200).
     function uploadHeaders() {
         return {
             "Authorization" => "Bearer " + authToken(),
-            "Content-Type" => "application/json"
+            "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON
         };
     }
 }

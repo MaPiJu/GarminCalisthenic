@@ -218,14 +218,14 @@ Done:
     centre (~1223,300); capture with `screencapture -R<win-rect>`. HTTP path tests
     use a local `python3 -m http.server`-style server + Settings → *Use Device
     HTTPS Requirements* toggled OFF so `http://127.0.0.1` is accepted.
-- **Watch → server upload (the watch half of the adaptation loop) — written,
-  awaiting a simulator build.** After a workout the app now POSTs what was
+- **Watch → server upload (the watch half of the adaptation loop) — built &
+  simulator-tested (2026-06-23).** After a workout the app now POSTs what was
   actually done to `POST {BASE_URL}/sessions/log`, so the next day's generation
   adapts. Store-and-forward, additive, and the workout still never touches the
   network:
   - `ApiConfig.mc` gains `logUrl()` (`BASE_URL + "/sessions/log"`) and
-    `uploadHeaders()` (`Authorization` + `Content-Type: application/json`); the
-    POST contract is documented next to the GET one.
+    `uploadHeaders()` (`Authorization` + JSON `Content-Type`); the POST contract
+    is documented next to the GET one.
   - `SessionLogger.resultsForUpload(sessionId)` reads the local `log:<id>` array
     and maps each validated set onto the server contract: `actual_reps` /
     `actual_hold_seconds` → `achieved_*`, and derives `completed` (held ≥ target,
@@ -235,9 +235,10 @@ Done:
     (`upload_queue`, bounded, de-duped per `session_id`). `flush()` drains it
     sequentially, one `makeWebRequest` in flight, with the SAME timeout-guard +
     fire-once discipline as `SessionRepository`. Dequeue policy: `200` → drop &
-    continue; any other HTTP code (server reached, body rejected) → drop too so a
-    poison item can't block the queue; transport error / timeout (offline) → keep
-    & stop, retried on a later flush.
+    continue; `400`/`401` (the payload itself is bad) → drop too so a poison item
+    can't block the queue; **everything else — 5xx, a 404 from a down backend, or
+    a transport error / timeout (offline) → keep & stop, retried on a later
+    flush** (true store-and-forward; a transient server error never loses a log).
   - `WorkoutController`: holds a `LogUploader`; `showFinish()` enqueues the
     finished log + `flush()`es it; `beginLoad()` also `flush()`es at launch, so a
     log that couldn't go out earlier (no phone / BLE / server down) is retried on
@@ -246,17 +247,39 @@ Done:
     so each result MUST carry all six keys; the watch emits explicit `null`s and
     relies on CIQ's JSON serializer including null-valued Dictionary entries.
     Verified cross-brick against the real backend `POST /v1/sessions/log` (payload
-    accepted → 200, history persisted; omitting the null keys → 400). **Monkey C
-    was NOT compiled here (no Garmin SDK in the agent env) — build & simulator-test
-    this on the user's machine** (localhost is fine in the simulator with *Use
-    Device HTTPS Requirements* OFF; the physical device needs HTTPS).
+    accepted → 200, history persisted; omitting the null keys → 400). The
+    simulator-captured POST body confirmed CIQ keeps `null`-valued entries.
+  - **Two real build/runtime bugs found on the first simulator build (this code
+    had never been compiled) and fixed (2026-06-23):**
+    - *Content-Type header* — `uploadHeaders()` sent the **string**
+      `"application/json"`, which `makeWebRequest` rejects as an invalid header
+      field (response code `-200`, never leaves the watch). Fixed to the CIQ enum
+      constant `Communications.REQUEST_CONTENT_TYPE_JSON` (+ `using
+      Toybox.Communications;` in `ApiConfig.mc`). The GET path was unaffected (it
+      only sends `Accept`).
+    - *Queue never drained / no dedup* — `pruneForSession` compared `session_id`
+      with `!=` on a statically-`Object` value, i.e. identity comparison that
+      never matched, so the queue never shrank → no dedup **and** an infinite
+      resend loop (~800 req/s once POSTs returned `200`). Fixed to value
+      comparison (`.equals()`).
+  - **Simulator-verified end-to-end on `fenix7x` (Enduro 2), HTTPS-requirements
+    OFF:** after the fixes, exactly one `POST /sessions/log` → `200`, queue
+    drained, backend `history.json` grows; the four `completed` cases
+    (reps-met=true, reps-low=false, hold-stopped-early=false, to-failure=true)
+    are correct in the captured body; the durable queue survived ~5 app restarts
+    and flushed on launch; finishing offline never blocks the DONE screen.
+  - **Caveat (real-device vs simulator):** a *down* backend returns different
+    things in each — the simulator answers `404` (host refused), a real device
+    returns a negative transport code. The retry policy above keeps the log in
+    BOTH cases (404 and negative both fall to the "keep & retry" branch), so this
+    is no longer a data-loss risk; only a true `400`/`401` drops an item.
 
 To do / next sessions:
-- **Build & simulator-test the watch → server upload** (written above, never
-  compiled here): finish a workout against a local backend with *Use Device HTTPS
-  Requirements* OFF, confirm one `POST /sessions/log` (200, server `history.json`
-  grows); then kill the server, finish another workout (stays queued), restart the
-  app online and confirm the queued log flushes on launch.
+- **Verify the upload on the physical Enduro 2** (the simulator pass above covers
+  `fenix7x`): the physical-device path is exactly where the real `-200`-style
+  transport codes and HTTPS requirement bite, so sideload the `fenix7x` .prg and
+  confirm one `POST /sessions/log` → 200 against an HTTPS backend, plus the
+  offline-queue-then-flush-on-launch behaviour.
 - (Optional) repeat the 4 fetch paths on the other 4 devices; behaviour is
   device-agnostic (seam is isolated in `SessionRepository`), so fenix7x is
   representative.
